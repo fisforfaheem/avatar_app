@@ -118,46 +118,56 @@ class _VoicePlayerState extends State<VoicePlayer> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            IconButton(
-              icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
-              onPressed: _togglePlayPause,
-            ),
-            Expanded(
-              child: Slider(
-                value: _progress.clamp(0.0, 1.0),
-                onChanged: _seekTo,
-              ),
-            ),
-          ],
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    // Ensure the player has a defined size
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 80),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
             children: [
-              Text(
-                _formatDuration(_currentPosition),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
+              // Fixed size for the play button to ensure it has dimensions
+              SizedBox(
+                width: 48,
+                height: 48,
+                child: IconButton(
+                  icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+                  onPressed: _togglePlayPause,
                 ),
               ),
-              Text(
-                _formatDuration(widget.duration),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
+              Expanded(
+                child: Slider(
+                  value: _progress.clamp(0.0, 1.0),
+                  onChanged: _seekTo,
                 ),
               ),
             ],
           ),
-        ),
-      ],
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _formatDuration(_currentPosition),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                Text(
+                  _formatDuration(widget.duration),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

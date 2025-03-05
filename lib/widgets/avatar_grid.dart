@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/avatar.dart';
+import 'package:provider/provider.dart';
+import '../providers/avatar_provider.dart';
+import '../screens/edit_avatar_screen.dart';
 
 class AvatarGrid extends StatefulWidget {
   final List<Avatar> avatars;
@@ -65,56 +68,69 @@ class _AvatarGridState extends State<AvatarGrid> {
                 ? 2
                 : 1;
 
-    return GridView.count(
-      crossAxisCount: crossAxisCount,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 16,
-      crossAxisSpacing: 16,
-      childAspectRatio: 1.2,
-      children: [
-        ...widget.avatars.asMap().entries.map((entry) {
-          final index = entry.key;
-          final avatar = entry.value;
-          return AnimatedOpacity(
-            opacity: _visibleItems > index ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-            child: TweenAnimationBuilder<double>(
-              tween:
-                  Tween(begin: 20.0, end: _visibleItems > index ? 0.0 : 20.0),
+    // Calculate a minimum height for the grid based on the number of items
+    // This ensures the grid has a size during initial rendering
+    final totalItems = widget.avatars.length + 1; // +1 for the "Add" tile
+    final rowCount = (totalItems / crossAxisCount).ceil();
+    final minHeight =
+        rowCount * 200.0; // 200 is an approximate height per row with spacing
+
+    return Container(
+      // Add a minimum height constraint to ensure the grid has a size
+      constraints: BoxConstraints(
+        minHeight: minHeight,
+      ),
+      child: GridView.count(
+        crossAxisCount: crossAxisCount,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 16,
+        childAspectRatio: 1.2,
+        children: [
+          ...widget.avatars.asMap().entries.map((entry) {
+            final index = entry.key;
+            final avatar = entry.value;
+            return AnimatedOpacity(
+              opacity: _visibleItems > index ? 1.0 : 0.0,
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOut,
-              builder: (context, value, child) {
-                return Transform.translate(
-                  offset: Offset(0, value),
-                  child: child,
-                );
-              },
-              child: AvatarTile(avatar: avatar),
-            ),
-          );
-        }),
-        // Add New Avatar Tile
-        if (_visibleItems > widget.avatars.length)
-          AnimatedOpacity(
-            opacity: 1.0,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 20.0, end: 0.0),
+              child: TweenAnimationBuilder<double>(
+                tween:
+                    Tween(begin: 20.0, end: _visibleItems > index ? 0.0 : 20.0),
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+                builder: (context, value, child) {
+                  return Transform.translate(
+                    offset: Offset(0, value),
+                    child: child,
+                  );
+                },
+                child: AvatarTile(avatar: avatar),
+              ),
+            );
+          }),
+          // Add New Avatar Tile
+          if (_visibleItems > widget.avatars.length)
+            AnimatedOpacity(
+              opacity: 1.0,
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOut,
-              builder: (context, value, child) {
-                return Transform.translate(
-                  offset: Offset(0, value),
-                  child: child,
-                );
-              },
-              child: AddAvatarTile(onTap: widget.onAddAvatar),
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: 20.0, end: 0.0),
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+                builder: (context, value, child) {
+                  return Transform.translate(
+                    offset: Offset(0, value),
+                    child: child,
+                  );
+                },
+                child: AddAvatarTile(onTap: widget.onAddAvatar),
+              ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -141,6 +157,14 @@ class AvatarTile extends StatelessWidget {
         return const Color(0xFF34C759); // iOS green
       case 'teal':
         return const Color(0xFF5AC8FA); // iOS teal
+      case 'red':
+        return const Color(0xFFFF3B30); // iOS red
+      case 'amber':
+        return const Color(0xFFFFCC00); // iOS yellow
+      case 'indigo':
+        return const Color(0xFF5E5CE6); // iOS indigo
+      case 'cyan':
+        return const Color(0xFF32ADE6); // iOS cyan
       default:
         return const Color(0xFF007AFF); // Default to iOS blue
     }
@@ -181,7 +205,7 @@ class AvatarTile extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Avatar Circle with Initial
+                  // Avatar Circle with Icon
                   Container(
                     width: 48,
                     height: 48,
@@ -191,13 +215,10 @@ class AvatarTile extends StatelessWidget {
                       color: Colors.white.withOpacity(0.2),
                     ),
                     child: Center(
-                      child: Text(
-                        avatar.name[0].toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w300,
-                          color: Colors.white,
-                        ),
+                      child: Icon(
+                        avatar.icon,
+                        size: 28,
+                        color: Colors.white,
                       ),
                     ),
                   ),
@@ -219,40 +240,88 @@ class AvatarTile extends StatelessWidget {
                   ),
                 ],
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      avatar.voices.isEmpty ? Icons.mic_none : Icons.mic,
-                      size: 16,
-                      color: Colors.white.withOpacity(0.9),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      avatar.voices.isEmpty
-                          ? 'Add your first voice'
-                          : 'Tap to manage voices',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w400,
-                        color: Colors.white.withOpacity(0.9),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          avatar.voices.isEmpty ? Icons.mic_none : Icons.mic,
+                          size: 16,
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          avatar.voices.isEmpty
+                              ? 'Add your first voice'
+                              : 'Tap to manage voices',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                            color: Colors.white.withOpacity(0.9),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Edit button
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withOpacity(0.2),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.edit,
+                        size: 18,
+                        color: Colors.white,
                       ),
+                      onPressed: () {
+                        _showEditAvatarDialog(context, avatar);
+                      },
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  // Show dialog to edit avatar
+  Future<void> _showEditAvatarDialog(
+      BuildContext context, Avatar avatar) async {
+    // Navigate to a dedicated screen instead of showing a dialog
+    final result = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => EditAvatarScreen(avatar: avatar),
+      ),
+    );
+
+    // If the screen returns a result, the avatar was updated
+    if (result == true && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text('Avatar "${avatar.name}" has been updated successfully.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 }
 

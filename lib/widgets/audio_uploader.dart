@@ -152,9 +152,20 @@ class _AudioUploaderState extends State<AudioUploader> {
   }
 
   Future<void> _handleSubmit() async {
-    if (_nameController.text.trim().isEmpty || _selectedFile == null) {
+    // More specific error messages
+    if (_nameController.text.trim().isEmpty && _selectedFile == null) {
       setState(() {
         _errorMessage = 'Please provide both a name and an audio file';
+      });
+      return;
+    } else if (_nameController.text.trim().isEmpty) {
+      setState(() {
+        _errorMessage = 'Please provide a name for this voice';
+      });
+      return;
+    } else if (_selectedFile == null) {
+      setState(() {
+        _errorMessage = 'Please select an audio file';
       });
       return;
     }
@@ -239,9 +250,15 @@ class _AudioUploaderState extends State<AudioUploader> {
 
   @override
   Widget build(BuildContext context) {
+    // Check if both name and file are provided
+    final bool isFormValid =
+        _nameController.text.trim().isNotEmpty && _selectedFile != null;
+
     return Container(
       padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.symmetric(vertical: 16),
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 200),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: Colors.grey.shade200),
@@ -269,22 +286,46 @@ class _AudioUploaderState extends State<AudioUploader> {
           const SizedBox(height: 16),
           TextField(
             controller: _nameController,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Voice Name',
               hintText: 'e.g., Happy Greeting, Introduction, etc.',
-              border: OutlineInputBorder(),
+              border: const OutlineInputBorder(),
+              // Add error border when name is empty but file is selected
+              errorBorder:
+                  _selectedFile != null && _nameController.text.trim().isEmpty
+                      ? OutlineInputBorder(
+                          borderSide: BorderSide(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        )
+                      : null,
+              // Show helper text when name is empty but file is selected
+              helperText:
+                  _selectedFile != null && _nameController.text.trim().isEmpty
+                      ? 'Please enter a name for this voice'
+                      : null,
+              helperStyle:
+                  _selectedFile != null && _nameController.text.trim().isEmpty
+                      ? TextStyle(color: Theme.of(context).colorScheme.error)
+                      : null,
             ),
             enabled: !_isUploading,
+            onChanged: (_) => setState(() {}), // Rebuild UI when text changes
           ),
           const SizedBox(height: 16),
           if (_selectedFile == null)
             InkWell(
               onTap: _isUploading ? null : _pickFile,
               child: Container(
+                width: double.infinity,
+                height: 150,
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   border: Border.all(
-                    color: Colors.grey.shade300,
+                    // Highlight border when name is provided but no file
+                    color: _nameController.text.trim().isNotEmpty
+                        ? Theme.of(context).colorScheme.primary.withOpacity(0.5)
+                        : Colors.grey.shade300,
                     width: 2,
                   ),
                   borderRadius: BorderRadius.circular(12),
@@ -293,7 +334,13 @@ class _AudioUploaderState extends State<AudioUploader> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                     side: BorderSide(
-                      color: Colors.grey.shade300,
+                      // Highlight border when name is provided but no file
+                      color: _nameController.text.trim().isNotEmpty
+                          ? Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withOpacity(0.5)
+                          : Colors.grey.shade300,
                       width: 2,
                       strokeAlign: BorderSide.strokeAlignOutside,
                     ),
@@ -301,11 +348,18 @@ class _AudioUploaderState extends State<AudioUploader> {
                   shadows: const [BoxShadow(color: Colors.transparent)],
                 ),
                 child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
                       Icons.upload_file,
                       size: 48,
-                      color: Colors.grey[400],
+                      // Highlight icon when name is provided but no file
+                      color: _nameController.text.trim().isNotEmpty
+                          ? Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withOpacity(0.7)
+                          : Colors.grey[400],
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -329,6 +383,8 @@ class _AudioUploaderState extends State<AudioUploader> {
             )
           else
             Container(
+              width: double.infinity,
+              height: 80,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.blue.withOpacity(0.1),
@@ -421,12 +477,31 @@ class _AudioUploaderState extends State<AudioUploader> {
               ),
               const SizedBox(width: 8),
               FilledButton(
-                onPressed: _isUploading ||
-                        _nameController.text.trim().isEmpty ||
-                        _selectedFile == null
-                    ? null
-                    : _handleSubmit,
-                child: Text(_isUploading ? 'Adding...' : 'Add Voice'),
+                onPressed: _isUploading || !isFormValid ? null : _handleSubmit,
+                style: ButtonStyle(
+                  // Make the button more prominent when it's enabled
+                  backgroundColor: WidgetStateProperty.resolveWith<Color>(
+                    (Set<WidgetState> states) {
+                      if (states.contains(WidgetState.disabled)) {
+                        return Theme.of(context).disabledColor;
+                      }
+                      return Theme.of(context).colorScheme.primary;
+                    },
+                  ),
+                  padding: WidgetStateProperty.all<EdgeInsets>(
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_isUploading ? 'Adding...' : 'Add Voice'),
+                    if (isFormValid && !_isUploading) ...[
+                      const SizedBox(width: 8),
+                      const Icon(Icons.check_circle, size: 16),
+                    ],
+                  ],
+                ),
               ),
             ],
           ),

@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
 /// Represents a voice avatar with its associated voices and properties
@@ -6,27 +7,32 @@ class Avatar {
   final String name;
   final String color;
   final List<Voice> voices;
+  final IconData icon;
 
   Avatar({
     String? id,
     required this.name,
     String? color,
     List<Voice>? voices,
+    IconData? icon,
   })  : id = id ?? const Uuid().v4(),
         color = color ?? _getRandomColor(),
-        voices = voices ?? [];
+        voices = voices ?? [],
+        icon = icon ?? _getDefaultIcon();
 
   /// Creates a copy of this Avatar with the given fields replaced with the new values
   Avatar copyWith({
     String? name,
     String? color,
     List<Voice>? voices,
+    IconData? icon,
   }) {
     return Avatar(
       id: id,
       name: name ?? this.name,
       color: color ?? this.color,
       voices: voices ?? this.voices,
+      icon: icon ?? this.icon,
     );
   }
 
@@ -41,6 +47,11 @@ class Avatar {
       'teal',
     ];
     return colors[DateTime.now().microsecond % colors.length];
+  }
+
+  /// Get a default icon for the avatar
+  static IconData _getDefaultIcon() {
+    return Icons.person;
   }
 }
 

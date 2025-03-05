@@ -401,14 +401,19 @@ class AvatarDetailScreen extends StatelessWidget {
     );
 
     if (confirmed == true && context.mounted) {
-      context.read<AvatarProvider>().removeAvatar(avatarId);
+      // First navigate back to the home screen
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Avatar "${avatar.name}" has been deleted.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      // Then remove the avatar
+      context.read<AvatarProvider>().removeAvatar(avatarId);
+      // Show a confirmation message
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Avatar "${avatar.name}" has been deleted.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 }

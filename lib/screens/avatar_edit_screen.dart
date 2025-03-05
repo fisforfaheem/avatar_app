@@ -274,7 +274,9 @@ class _AvatarEditScreenState extends State<AvatarEditScreen> {
                             avatarProvider.removeAvatar(widget.avatar.id);
                             Navigator.of(context).pop(); // Close dialog
                             Navigator.of(context)
-                                .pop(); // Return to previous screen
+                                .pop(); // Return to detail screen
+                            Navigator.of(context)
+                                .pop(); // Return to home screen
                           },
                           style: FilledButton.styleFrom(
                             backgroundColor: Colors.red,

@@ -5,6 +5,7 @@ import '../providers/avatar_provider.dart';
 import '../widgets/audio_uploader.dart';
 import '../widgets/audio_player.dart';
 import '../screens/avatar_edit_screen.dart';
+import '../widgets/bulk_audio_uploader.dart';
 
 class AvatarDetailScreen extends StatelessWidget {
   final String avatarId;
@@ -293,39 +294,104 @@ class AvatarDetailScreen extends StatelessWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Add New Voice',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w500,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Add New Voice',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                      tooltip: 'Close',
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 16),
-              AudioUploader(
-                onUpload: (name, audioPath, duration) {
-                  final voice = Voice(
-                    name: name,
-                    audioUrl: audioPath,
-                    duration: duration,
-                  );
-                  avatarProvider.addVoiceToAvatar(avatarId, voice);
-                  Navigator.pop(context);
-                },
-              ),
-            ],
+                const SizedBox(height: 16),
+
+                // Tab selection
+                DefaultTabController(
+                  length: 2,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TabBar(
+                        tabs: const [
+                          Tab(text: 'SINGLE UPLOAD'),
+                          Tab(text: 'BULK UPLOAD'),
+                        ],
+                        labelColor: Colors.black87,
+                        unselectedLabelColor: Colors.black54,
+                        indicatorColor: _getColorFromString(
+                          avatarProvider.avatars
+                              .firstWhere((a) => a.id == avatarId)
+                              .color,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        height: 400, // Fixed height for the tab content
+                        child: TabBarView(
+                          children: [
+                            // Single upload tab
+                            SingleChildScrollView(
+                              child: AudioUploader(
+                                onUpload: (name, audioPath, duration) {
+                                  final voice = Voice(
+                                    name: name,
+                                    audioUrl: audioPath,
+                                    duration: duration,
+                                  );
+                                  avatarProvider.addVoiceToAvatar(
+                                      avatarId, voice);
+                                  Navigator.pop(context);
+                                },
+                              ),
+                            ),
+
+                            // Bulk upload tab
+                            SingleChildScrollView(
+                              child: BulkAudioUploader(
+                                avatarColor: avatarProvider.avatars
+                                    .firstWhere((a) => a.id == avatarId)
+                                    .color,
+                                onUpload: (voices) {
+                                  for (final voice in voices) {
+                                    avatarProvider.addVoiceToAvatar(
+                                        avatarId, voice);
+                                  }
+                                  Navigator.pop(context);
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

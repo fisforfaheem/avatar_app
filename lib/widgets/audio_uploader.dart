@@ -22,22 +22,29 @@ class _AudioUploaderState extends State<AudioUploader> {
   final _nameController = TextEditingController();
   PlatformFile? _selectedFile;
   bool _isUploading = false;
-  final _audioPlayer = AudioPlayer();
+  AudioPlayer? _audioPlayer;
   Duration _duration = Duration.zero;
   String? _errorMessage;
   String? _tempFilePath;
   StreamSubscription? _durationSubscription;
+  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
+    _initAudioPlayer();
+  }
+
+  void _initAudioPlayer() {
+    _audioPlayer = AudioPlayer();
     _setupAudioPlayer();
   }
 
   void _setupAudioPlayer() {
     _durationSubscription?.cancel();
-    _durationSubscription = _audioPlayer.onDurationChanged.listen((Duration d) {
-      if (mounted) {
+    _durationSubscription =
+        _audioPlayer?.onDurationChanged.listen((Duration d) {
+      if (!_isDisposed && mounted) {
         setState(() => _duration = d);
       }
     });
@@ -45,9 +52,12 @@ class _AudioUploaderState extends State<AudioUploader> {
 
   @override
   void dispose() {
+    _isDisposed = true;
     _nameController.dispose();
     _durationSubscription?.cancel();
-    _audioPlayer.dispose();
+    _durationSubscription = null;
+    _audioPlayer?.dispose();
+    _audioPlayer = null;
     _cleanupTempFile();
     super.dispose();
   }
@@ -55,7 +65,10 @@ class _AudioUploaderState extends State<AudioUploader> {
   void _cleanupTempFile() {
     if (_tempFilePath != null) {
       try {
-        File(_tempFilePath!).deleteSync();
+        final file = File(_tempFilePath!);
+        if (file.existsSync()) {
+          file.deleteSync();
+        }
         _tempFilePath = null;
       } catch (e) {
         debugPrint('Error cleaning up temp file: $e');
@@ -63,18 +76,27 @@ class _AudioUploaderState extends State<AudioUploader> {
     }
   }
 
+  // Safe setState that checks if the widget is still mounted
+  void _safeSetState(VoidCallback fn) {
+    if (!_isDisposed && mounted) {
+      setState(fn);
+    }
+  }
+
   Future<void> _pickFile() async {
     try {
-      setState(() {
+      _safeSetState(() {
         _errorMessage = null;
       });
 
       final result = await FilePicker.platform.pickFiles(
-        type: FileType.audio,
+        type: FileType.custom,
         allowMultiple: false,
         allowedExtensions: ['mp3', 'wav', 'ogg', 'm4a'],
         withData: true,
       );
+
+      if (_isDisposed) return;
 
       if (result == null || result.files.isEmpty) {
         debugPrint('No file selected');
@@ -85,7 +107,7 @@ class _AudioUploaderState extends State<AudioUploader> {
 
       // Verify file size (limit to 10MB)
       if (file.size > 10 * 1024 * 1024) {
-        setState(() {
+        _safeSetState(() {
           _errorMessage = 'File size must be less than 10MB';
         });
         return;
@@ -105,23 +127,41 @@ class _AudioUploaderState extends State<AudioUploader> {
         throw Exception('No file data available');
       }
 
+      if (_isDisposed) {
+        // Clean up if widget was disposed during async operation
+        try {
+          if (tempFile.existsSync()) {
+            tempFile.deleteSync();
+          }
+        } catch (e) {
+          debugPrint('Error cleaning up temp file: $e');
+        }
+        return;
+      }
+
       _cleanupTempFile();
       _tempFilePath = tempFile.path;
 
-      setState(() {
+      _safeSetState(() {
         _selectedFile = file;
       });
 
       // Get audio duration
       try {
-        await _audioPlayer.stop();
-        await _audioPlayer.setSource(DeviceFileSource(tempFile.path));
+        if (_audioPlayer == null) {
+          _initAudioPlayer();
+        }
+
+        await _audioPlayer?.stop();
+        await _audioPlayer?.setSource(DeviceFileSource(tempFile.path));
 
         // Wait for duration to be set via listener
         await Future.delayed(const Duration(milliseconds: 500));
 
+        if (_isDisposed) return;
+
         if (_duration == Duration.zero) {
-          setState(() {
+          _safeSetState(() {
             _errorMessage = 'Could not determine audio duration';
             _selectedFile = null;
           });
@@ -130,7 +170,7 @@ class _AudioUploaderState extends State<AudioUploader> {
 
         // Limit duration to 5 minutes
         if (_duration.inMinutes > 5) {
-          setState(() {
+          _safeSetState(() {
             _errorMessage = 'Audio must be shorter than 5 minutes';
             _selectedFile = null;
           });
@@ -138,39 +178,44 @@ class _AudioUploaderState extends State<AudioUploader> {
         }
       } catch (e) {
         debugPrint('Error loading audio: $e');
-        setState(() {
-          _errorMessage = 'Error loading audio file. Please try another file.';
-          _selectedFile = null;
-        });
+        if (!_isDisposed) {
+          _safeSetState(() {
+            _errorMessage =
+                'Error loading audio file. Please try another file.';
+            _selectedFile = null;
+          });
+        }
       }
     } catch (e) {
       debugPrint('Error picking file: $e');
-      setState(() {
-        _errorMessage = 'Error selecting file. Please try again.';
-      });
+      if (!_isDisposed) {
+        _safeSetState(() {
+          _errorMessage = 'Error selecting file. Please try again.';
+        });
+      }
     }
   }
 
   Future<void> _handleSubmit() async {
     // More specific error messages
     if (_nameController.text.trim().isEmpty && _selectedFile == null) {
-      setState(() {
+      _safeSetState(() {
         _errorMessage = 'Please provide both a name and an audio file';
       });
       return;
     } else if (_nameController.text.trim().isEmpty) {
-      setState(() {
+      _safeSetState(() {
         _errorMessage = 'Please provide a name for this voice';
       });
       return;
     } else if (_selectedFile == null) {
-      setState(() {
+      _safeSetState(() {
         _errorMessage = 'Please select an audio file';
       });
       return;
     }
 
-    setState(() {
+    _safeSetState(() {
       _isUploading = true;
       _errorMessage = null;
     });
@@ -201,7 +246,7 @@ class _AudioUploaderState extends State<AudioUploader> {
         throw Exception('No temporary file available');
       }
 
-      if (mounted) {
+      if (!_isDisposed && mounted) {
         widget.onUpload(
           _nameController.text.trim(),
           savedFile.path,
@@ -209,7 +254,7 @@ class _AudioUploaderState extends State<AudioUploader> {
         );
 
         // Reset form
-        setState(() {
+        _safeSetState(() {
           _nameController.clear();
           _selectedFile = null;
           _duration = Duration.zero;
@@ -225,14 +270,14 @@ class _AudioUploaderState extends State<AudioUploader> {
       }
     } catch (e) {
       debugPrint('Error saving file: $e');
-      if (mounted) {
-        setState(() {
+      if (!_isDisposed && mounted) {
+        _safeSetState(() {
           _errorMessage = 'Error saving file. Please try again.';
         });
       }
     } finally {
-      if (mounted) {
-        setState(() {
+      if (!_isDisposed && mounted) {
+        _safeSetState(() {
           _isUploading = false;
         });
       }
@@ -240,7 +285,7 @@ class _AudioUploaderState extends State<AudioUploader> {
   }
 
   void _handleCancel() {
-    setState(() {
+    _safeSetState(() {
       _nameController.clear();
       _selectedFile = null;
       _duration = Duration.zero;
@@ -310,7 +355,8 @@ class _AudioUploaderState extends State<AudioUploader> {
                       : null,
             ),
             enabled: !_isUploading,
-            onChanged: (_) => setState(() {}), // Rebuild UI when text changes
+            onChanged: (_) =>
+                _safeSetState(() {}), // Rebuild UI when text changes
           ),
           const SizedBox(height: 16),
           if (_selectedFile == null)

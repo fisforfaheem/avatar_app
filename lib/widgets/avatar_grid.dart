@@ -60,6 +60,7 @@ class _AvatarGridState extends State<AvatarGrid> {
   Widget build(BuildContext context) {
     // Get the screen width to determine the grid layout
     final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth > 900;
     final crossAxisCount = screenWidth > 1200
         ? 4
         : screenWidth > 900
@@ -73,7 +74,7 @@ class _AvatarGridState extends State<AvatarGrid> {
     final totalItems = widget.avatars.length + 1; // +1 for the "Add" tile
     final rowCount = (totalItems / crossAxisCount).ceil();
     final minHeight =
-        rowCount * 200.0; // 200 is an approximate height per row with spacing
+        rowCount * 220.0; // 220 is an approximate height per row with spacing
 
     return Container(
       // Add a minimum height constraint to ensure the grid has a size
@@ -84,9 +85,9 @@ class _AvatarGridState extends State<AvatarGrid> {
         crossAxisCount: crossAxisCount,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        childAspectRatio: 1.2,
+        mainAxisSpacing: 20,
+        crossAxisSpacing: 20,
+        childAspectRatio: isDesktop ? 1.1 : 1.2,
         children: [
           ...widget.avatars.asMap().entries.map((entry) {
             final index = entry.key;
@@ -110,38 +111,46 @@ class _AvatarGridState extends State<AvatarGrid> {
               ),
             );
           }),
-          // Add New Avatar Tile
-          if (_visibleItems > widget.avatars.length)
-            AnimatedOpacity(
-              opacity: 1.0,
+          // Add avatar tile
+          AnimatedOpacity(
+            opacity: _visibleItems > widget.avatars.length ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(
+                  begin: 20.0,
+                  end: _visibleItems > widget.avatars.length ? 0.0 : 20.0),
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOut,
-              child: TweenAnimationBuilder<double>(
-                tween: Tween(begin: 20.0, end: 0.0),
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOut,
-                builder: (context, value, child) {
-                  return Transform.translate(
-                    offset: Offset(0, value),
-                    child: child,
-                  );
-                },
-                child: AddAvatarTile(onTap: widget.onAddAvatar),
-              ),
+              builder: (context, value, child) {
+                return Transform.translate(
+                  offset: Offset(0, value),
+                  child: child,
+                );
+              },
+              child: AddAvatarTile(onTap: widget.onAddAvatar),
             ),
+          ),
         ],
       ),
     );
   }
 }
 
-class AvatarTile extends StatelessWidget {
+class AvatarTile extends StatefulWidget {
   final Avatar avatar;
 
   const AvatarTile({
     super.key,
     required this.avatar,
   });
+
+  @override
+  State<AvatarTile> createState() => _AvatarTileState();
+}
+
+class _AvatarTileState extends State<AvatarTile> {
+  bool _isHovered = false;
 
   Color _getColorFromString(String colorName) {
     switch (colorName) {
@@ -172,160 +181,168 @@ class AvatarTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _getColorFromString(avatar.color);
+    final color = _getColorFromString(widget.avatar.color);
+    final isDesktop = MediaQuery.of(context).size.width > 900;
 
-    return Card(
-      elevation: 2,
-      shadowColor: color.withOpacity(0.3),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: InkWell(
-        onTap: () {
-          Navigator.pushNamed(context, '/avatar/${avatar.id}');
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(
+          begin: 0,
+          end: _isHovered && isDesktop ? -5 : 0,
+        ),
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        builder: (context, value, child) {
+          return Transform.translate(
+            offset: Offset(0, value),
+            child: child,
+          );
         },
-        borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                color,
-                color.withOpacity(0.8),
-              ],
-            ),
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Avatar Circle with Icon
-                  Container(
-                    width: 48,
-                    height: 48,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withOpacity(0.2),
-                    ),
-                    child: Center(
-                      child: Icon(
-                        avatar.icon,
-                        size: 28,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    avatar.name,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w300,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${avatar.voices.length} ${avatar.voices.length == 1 ? 'voice' : 'voices'}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.white.withOpacity(0.7),
-                    ),
-                  ),
-                ],
+            boxShadow: [
+              BoxShadow(
+                color: _isHovered && isDesktop
+                    ? color.withOpacity(0.3)
+                    : Colors.black.withOpacity(0.05),
+                blurRadius: _isHovered && isDesktop ? 12 : 5,
+                offset: const Offset(0, 3),
+                spreadRadius: _isHovered && isDesktop ? 1 : 0,
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () {
+                Navigator.pushNamed(
+                  context,
+                  '/avatar/${widget.avatar.id}',
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Avatar icon and voice count
+                    Row(
                       children: [
-                        Icon(
-                          avatar.voices.isEmpty ? Icons.mic_none : Icons.mic,
-                          size: 16,
-                          color: Colors.white.withOpacity(0.9),
+                        // Avatar icon
+                        Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Icon(
+                              widget.avatar.icon,
+                              color: Colors.white,
+                              size: 28,
+                            ),
+                          ),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          avatar.voices.isEmpty
-                              ? 'Add your first voice'
-                              : 'Tap to manage voices',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w400,
-                            color: Colors.white.withOpacity(0.9),
+                        const Spacer(),
+                        // Voice count badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: color.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.mic,
+                                size: 16,
+                                color: color,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${widget.avatar.voices.length}',
+                                style: TextStyle(
+                                  color: color,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  // Edit button
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withOpacity(0.2),
-                    ),
-                    child: IconButton(
-                      icon: const Icon(
-                        Icons.edit,
-                        size: 18,
-                        color: Colors.white,
+                    const SizedBox(height: 16),
+                    // Avatar name
+                    Text(
+                      widget.avatar.name,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
                       ),
-                      onPressed: () {
-                        _showEditAvatarDialog(context, avatar);
-                      },
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    // Last updated
+                    Text(
+                      'Updated ${_formatDate(widget.avatar.voices.isNotEmpty ? widget.avatar.voices.last.createdAt : DateTime.now())}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                    const Spacer(),
+                    // View button - only show on hover for desktop
+                    if (_isHovered && isDesktop)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: FilledButton.tonal(
+                          onPressed: () {
+                            Navigator.pushNamed(
+                              context,
+                              '/avatar/${widget.avatar.id}',
+                            );
+                          },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: color.withOpacity(0.1),
+                            foregroundColor: color,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text('View Details'),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  // Show dialog to edit avatar
-  Future<void> _showEditAvatarDialog(
-      BuildContext context, Avatar avatar) async {
-    // Navigate to a dedicated screen instead of showing a dialog
-    final result = await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => EditAvatarScreen(avatar: avatar),
-      ),
-    );
-
-    // If the screen returns a result, the avatar was updated
-    if (result == true && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content:
-              Text('Avatar "${avatar.name}" has been updated successfully.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
   }
 }
 
-class AddAvatarTile extends StatelessWidget {
+class AddAvatarTile extends StatefulWidget {
   final VoidCallback onTap;
 
   const AddAvatarTile({
@@ -334,60 +351,92 @@ class AddAvatarTile extends StatelessWidget {
   });
 
   @override
+  State<AddAvatarTile> createState() => _AddAvatarTileState();
+}
+
+class _AddAvatarTileState extends State<AddAvatarTile> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 2,
-      shadowColor: Colors.grey.withOpacity(0.2),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+    final isDesktop = MediaQuery.of(context).size.width > 900;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(
+          begin: 0,
+          end: _isHovered && isDesktop ? -5 : 0,
+        ),
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        builder: (context, value, child) {
+          return Transform.translate(
+            offset: Offset(0, value),
+            child: child,
+          );
+        },
         child: Container(
-          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: _isHovered && isDesktop
+                ? primaryColor.withOpacity(0.05)
+                : Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: Colors.grey.shade200,
+              color:
+                  _isHovered && isDesktop ? primaryColor : Colors.grey.shade200,
               width: 2,
+              style: BorderStyle.solid,
             ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.grey.shade100,
+            boxShadow: [
+              if (_isHovered && isDesktop)
+                BoxShadow(
+                  color: primaryColor.withOpacity(0.2),
+                  blurRadius: 12,
+                  offset: const Offset(0, 3),
                 ),
-                child: Icon(
-                  Icons.add_circle_outline,
-                  size: 32,
-                  color: Theme.of(context).primaryColor,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Add New Avatar',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w300,
-                  color: Colors.grey[800],
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Create a voice collection',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
-              ),
             ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: widget.onTap,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: primaryColor.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.add,
+                        size: 32,
+                        color: primaryColor,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Create New Avatar',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: primaryColor,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),

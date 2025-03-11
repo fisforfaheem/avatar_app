@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'dart:async';
 import '../providers/avatar_provider.dart';
 import '../providers/theme_provider.dart';
@@ -77,368 +78,401 @@ class _HomeScreenState extends State<HomeScreen> {
         final theme = Theme.of(context);
         final isDarkMode = theme.brightness == Brightness.dark;
 
-        return Scaffold(
-          backgroundColor: theme.colorScheme.surface,
-          appBar: AppBar(
-            title: Text(
-              'VOICE AVATAR HUB',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
-                fontSize: isMobile ? 16 : 18,
-                color: theme.colorScheme.onSurface,
+        return AnimatedTheme(
+          data: theme,
+          duration: const Duration(milliseconds: 400),
+          child: Scaffold(
+            backgroundColor: theme.colorScheme.surface,
+            appBar: AppBar(
+              title: Text(
+                'VOICE AVATAR HUB',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  fontSize: isMobile ? 16 : 18,
+                  color: theme.colorScheme.onSurface,
+                ),
               ),
-            ),
-            centerTitle: true,
-            elevation: 0,
-            backgroundColor: Colors.transparent,
-            foregroundColor: theme.colorScheme.onSurface,
-            actions: [
-              // Add Avatar button
-              if (!isDeletingAvatar)
+              centerTitle: true,
+              elevation: 0,
+              backgroundColor: Colors.transparent,
+              foregroundColor: theme.colorScheme.onSurface,
+              actions: [
+                // Add Avatar button
+                if (!isDeletingAvatar)
+                  _AnimatedIconButton(
+                    icon: Icons.add_circle_outline,
+                    tooltip: 'Add New Avatar (Ctrl+N)',
+                    onPressed: () => _showAddAvatarDialog(context),
+                    color: theme.colorScheme.onSurface,
+                    hoverColor: theme.colorScheme.primary,
+                    size: isMobile ? 20 : 22,
+                  ),
+                // Search button
                 _AnimatedIconButton(
-                  icon: Icons.add_circle_outline,
-                  tooltip: 'Add New Avatar (Ctrl+N)',
-                  onPressed: () => _showAddAvatarDialog(context),
+                  icon: Icons.search,
+                  tooltip: 'Search Voices (Ctrl+F)',
+                  onPressed:
+                      isDeletingAvatar
+                          ? null
+                          : () =>
+                              _showGlobalSearchDialog(context, avatarProvider),
                   color: theme.colorScheme.onSurface,
                   hoverColor: theme.colorScheme.primary,
                   size: isMobile ? 20 : 22,
+                  isDisabled: isDeletingAvatar,
                 ),
-              // Search button
-              _AnimatedIconButton(
-                icon: Icons.search,
-                tooltip: 'Search Voices (Ctrl+F)',
-                onPressed:
-                    isDeletingAvatar
-                        ? null
-                        : () =>
-                            _showGlobalSearchDialog(context, avatarProvider),
-                color: theme.colorScheme.onSurface,
-                hoverColor: theme.colorScheme.primary,
-                size: isMobile ? 20 : 22,
-                isDisabled: isDeletingAvatar,
-              ),
-              // Quick access button
-              if (recentVoices.isNotEmpty || popularVoices.isNotEmpty)
-                _AnimatedPopupMenuButton<Map<String, dynamic>>(
-                  tooltip: 'Quick Access',
-                  icon: Icons.access_time,
-                  iconSize: isMobile ? 20 : 22,
-                  color: theme.colorScheme.onSurface,
-                  hoverColor: theme.colorScheme.primary,
-                  enabled: !isDeletingAvatar,
-                  itemBuilder: (context) {
-                    List<PopupMenuEntry<Map<String, dynamic>>> items = [];
+                // Quick access button
+                if (recentVoices.isNotEmpty || popularVoices.isNotEmpty)
+                  _AnimatedPopupMenuButton<Map<String, dynamic>>(
+                    tooltip: 'Quick Access',
+                    icon: Icons.access_time,
+                    iconSize: isMobile ? 20 : 22,
+                    color: theme.colorScheme.onSurface,
+                    hoverColor: theme.colorScheme.primary,
+                    enabled: !isDeletingAvatar,
+                    itemBuilder: (context) {
+                      List<PopupMenuEntry<Map<String, dynamic>>> items = [];
 
-                    // Recent voices section
-                    if (recentVoices.isNotEmpty) {
-                      items.add(
-                        const PopupMenuItem<Map<String, dynamic>>(
-                          enabled: false,
-                          height: 24,
-                          child: Text(
-                            'RECENTLY USED',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black54,
-                            ),
-                          ),
-                        ),
-                      );
-
-                      for (final item in recentVoices) {
-                        final avatar = item['avatar'] as Avatar;
-                        final voice = item['voice'] as Voice;
-                        final avatarColor = _getColorFromString(avatar.color);
-
+                      // Recent voices section
+                      if (recentVoices.isNotEmpty) {
                         items.add(
-                          PopupMenuItem<Map<String, dynamic>>(
-                            value: item,
-                            height: 40,
-                            child: Row(
-                              children: [
-                                Icon(avatar.icon, size: 16, color: avatarColor),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    voice.name,
-                                    style: const TextStyle(fontSize: 14),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
+                          const PopupMenuItem<Map<String, dynamic>>(
+                            enabled: false,
+                            height: 24,
+                            child: Text(
+                              'RECENTLY USED',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black54,
+                              ),
                             ),
                           ),
                         );
-                      }
 
-                      // Add divider if we have both recent and popular
-                      if (popularVoices.isNotEmpty) {
-                        items.add(const PopupMenuDivider());
-                      }
-                    }
+                        for (final item in recentVoices) {
+                          final avatar = item['avatar'] as Avatar;
+                          final voice = item['voice'] as Voice;
+                          final avatarColor = _getColorFromString(avatar.color);
 
-                    // Popular voices section
-                    if (popularVoices.isNotEmpty) {
-                      items.add(
-                        const PopupMenuItem<Map<String, dynamic>>(
-                          enabled: false,
-                          height: 24,
-                          child: Text(
-                            'MOST USED',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black54,
-                            ),
-                          ),
-                        ),
-                      );
-
-                      for (final item in popularVoices) {
-                        final avatar = item['avatar'] as Avatar;
-                        final voice = item['voice'] as Voice;
-                        final avatarColor = _getColorFromString(avatar.color);
-
-                        items.add(
-                          PopupMenuItem<Map<String, dynamic>>(
-                            value: item,
-                            height: 40,
-                            child: Row(
-                              children: [
-                                _CustomBadge(
-                                  label: '${voice.playCount}',
-                                  child: Icon(
+                          items.add(
+                            PopupMenuItem<Map<String, dynamic>>(
+                              value: item,
+                              height: 40,
+                              child: Row(
+                                children: [
+                                  Icon(
                                     avatar.icon,
                                     size: 16,
                                     color: avatarColor,
                                   ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      voice.name,
+                                      style: const TextStyle(fontSize: 14),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+
+                        // Add divider if we have both recent and popular
+                        if (popularVoices.isNotEmpty) {
+                          items.add(const PopupMenuDivider());
+                        }
+                      }
+
+                      // Popular voices section
+                      if (popularVoices.isNotEmpty) {
+                        items.add(
+                          const PopupMenuItem<Map<String, dynamic>>(
+                            enabled: false,
+                            height: 24,
+                            child: Text(
+                              'MOST USED',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black54,
+                              ),
+                            ),
+                          ),
+                        );
+
+                        for (final item in popularVoices) {
+                          final avatar = item['avatar'] as Avatar;
+                          final voice = item['voice'] as Voice;
+                          final avatarColor = _getColorFromString(avatar.color);
+
+                          items.add(
+                            PopupMenuItem<Map<String, dynamic>>(
+                              value: item,
+                              height: 40,
+                              child: Row(
+                                children: [
+                                  _CustomBadge(
+                                    label: '${voice.playCount}',
+                                    child: Icon(
+                                      avatar.icon,
+                                      size: 16,
+                                      color: avatarColor,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      voice.name,
+                                      style: const TextStyle(fontSize: 14),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+                      }
+
+                      return items;
+                    },
+                    onSelected: (item) {
+                      final voice = item['voice'] as Voice;
+                      _playOrPauseVoice(voice);
+                    },
+                  ),
+                // Theme toggle button
+                _AnimatedIconButton(
+                  icon:
+                      themeProvider.themeMode == ThemeMode.light
+                          ? Icons.dark_mode
+                          : Icons.light_mode,
+                  tooltip:
+                      themeProvider.themeMode == ThemeMode.light
+                          ? 'Switch to Dark Mode'
+                          : 'Switch to Light Mode',
+                  onPressed: () => _showThemeDialog(context),
+                  color: theme.colorScheme.onSurface,
+                  hoverColor: theme.colorScheme.primary,
+                  size: isMobile ? 18 : 20,
+                  useAnimatedSwitcher: true,
+                  switcherKey: ValueKey<ThemeMode>(themeProvider.themeMode),
+                ),
+                // Settings button
+                _AnimatedIconButton(
+                  icon: Icons.settings,
+                  tooltip: 'Settings',
+                  onPressed:
+                      () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SettingsScreen(),
+                        ),
+                      ),
+                  color: theme.colorScheme.onSurface,
+                  hoverColor: theme.colorScheme.primary,
+                  size: isMobile ? 18 : 20,
+                ),
+                // Help button for keyboard shortcuts - hide on mobile
+                if (!isMobile)
+                  _AnimatedIconButton(
+                    icon: Icons.keyboard,
+                    tooltip: 'Keyboard Shortcuts',
+                    onPressed: () => _showKeyboardShortcutsDialog(context),
+                    color: theme.colorScheme.onSurface,
+                    hoverColor: theme.colorScheme.primary,
+                    size: 20,
+                  ),
+                // Stop button - only show when audio is playing
+                if (_currentlyPlayingVoiceId != null)
+                  Padding(
+                    padding: EdgeInsets.only(right: isMobile ? 8.0 : 12.0),
+                    child: _AnimatedIconButton(
+                      icon: Icons.stop_rounded,
+                      tooltip: 'Stop playback (Esc)',
+                      onPressed: _stopAllPlayback,
+                      color: Colors.black87,
+                      hoverColor: theme.colorScheme.error,
+                      size: isMobile ? 18 : 20,
+                      useContainer: true,
+                      containerColor: Colors.black.withOpacity(0.08),
+                      containerHoverColor: theme.colorScheme.errorContainer
+                          .withOpacity(0.2),
+                    ),
+                  ),
+              ],
+            ),
+            body: AnimatedContainer(
+              duration: const Duration(milliseconds: 400),
+              curve: Curves.easeOutCubic,
+              color: theme.colorScheme.surface,
+              child: Stack(
+                children: [
+                  // Main content
+                  Focus(
+                    autofocus: true,
+                    onKeyEvent: (node, event) {
+                      // Handle keyboard shortcuts
+                      if (event is KeyDownEvent) {
+                        // Escape key to stop playback
+                        if (event.logicalKey == LogicalKeyboardKey.escape) {
+                          _stopAllPlayback();
+                          return KeyEventResult.handled;
+                        }
+
+                        // Ctrl+F to open search
+                        if (event.logicalKey == LogicalKeyboardKey.keyF &&
+                            (HardwareKeyboard.instance.isControlPressed ||
+                                HardwareKeyboard.instance.isMetaPressed)) {
+                          _showGlobalSearchDialog(context, avatarProvider);
+                          return KeyEventResult.handled;
+                        }
+
+                        // Ctrl+N to create new avatar
+                        if (event.logicalKey == LogicalKeyboardKey.keyN &&
+                            (HardwareKeyboard.instance.isControlPressed ||
+                                HardwareKeyboard.instance.isMetaPressed)) {
+                          _showAddAvatarDialog(context);
+                          return KeyEventResult.handled;
+                        }
+
+                        // Space to play/pause selected voice
+                        if (event.logicalKey == LogicalKeyboardKey.space) {
+                          // If there's a currently selected avatar, play/pause its first voice
+                          if (avatarProvider.selectedAvatar != null &&
+                              avatarProvider
+                                  .selectedAvatar!
+                                  .voices
+                                  .isNotEmpty) {
+                            _playOrPauseVoice(
+                              avatarProvider.selectedAvatar!.voices.first,
+                            );
+                            return KeyEventResult.handled;
+                          }
+                          return KeyEventResult.ignored;
+                        }
+
+                        // Arrow keys for navigation
+                        if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
+                            event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                          // Navigate between voices in the selected avatar
+                          if (avatarProvider.selectedAvatar != null) {
+                            // Implementation would depend on your UI structure
+                            // This is a placeholder for the navigation logic
+                            HapticFeedback.lightImpact();
+                            return KeyEventResult.handled;
+                          }
+                          return KeyEventResult.ignored;
+                        }
+
+                        if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
+                            event.logicalKey == LogicalKeyboardKey.arrowRight) {
+                          // Navigate between avatars
+                          final avatars = avatarProvider.avatars;
+                          if (avatars.isNotEmpty) {
+                            int currentIndex = -1;
+                            if (avatarProvider.selectedAvatar != null) {
+                              currentIndex = avatars.indexWhere(
+                                (a) =>
+                                    a.id == avatarProvider.selectedAvatar!.id,
+                              );
+                            }
+
+                            int newIndex;
+                            if (event.logicalKey ==
+                                LogicalKeyboardKey.arrowLeft) {
+                              // Move to previous avatar
+                              newIndex =
+                                  currentIndex > 0
+                                      ? currentIndex - 1
+                                      : avatars.length - 1;
+                            } else {
+                              // Move to next avatar
+                              newIndex = (currentIndex + 1) % avatars.length;
+                            }
+
+                            avatarProvider.setSelectedAvatar(
+                              avatars[newIndex].id,
+                            );
+                            HapticFeedback.lightImpact();
+                            return KeyEventResult.handled;
+                          }
+                          return KeyEventResult.ignored;
+                        }
+                      }
+                      return KeyEventResult.ignored;
+                    },
+                    child: SafeArea(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isMobile ? 12.0 : 16.0,
+                        ),
+                        child:
+                            avatarProvider.isLoading
+                                ? _buildLoadingState()
+                                : avatarProvider.errorMessage != null
+                                ? _buildErrorState(avatarProvider.errorMessage!)
+                                : avatarProvider.avatars.isEmpty
+                                ? _buildEmptyState()
+                                : _buildAllAvatarsView(
+                                  context,
+                                  avatarProvider.avatars,
                                 ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    voice.name,
-                                    style: const TextStyle(fontSize: 14),
-                                    overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+
+                  // Deletion overlay with animation
+                  if (isDeletingAvatar)
+                    AnimatedOpacity(
+                      opacity: isDeletingAvatar ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 400),
+                      curve: Curves.easeOut,
+                      child: Container(
+                        color: theme.colorScheme.surface.withOpacity(0.7),
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: AnimationConfiguration.toStaggeredList(
+                              duration: const Duration(milliseconds: 400),
+                              childAnimationBuilder:
+                                  (widget) => SlideAnimation(
+                                    verticalOffset: 30.0,
+                                    child: FadeInAnimation(child: widget),
+                                  ),
+                              children: [
+                                CircularProgressIndicator(
+                                  color: theme.colorScheme.primary,
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Deleting avatar...',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w300,
+                                    color: theme.colorScheme.onSurface,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Please wait, this may take a moment.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: theme.colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                        );
-                      }
-                    }
-
-                    return items;
-                  },
-                  onSelected: (item) {
-                    final voice = item['voice'] as Voice;
-                    _playOrPauseVoice(voice);
-                  },
-                ),
-              // Theme toggle button
-              _AnimatedIconButton(
-                icon:
-                    themeProvider.themeMode == ThemeMode.light
-                        ? Icons.dark_mode
-                        : Icons.light_mode,
-                tooltip:
-                    themeProvider.themeMode == ThemeMode.light
-                        ? 'Switch to Dark Mode'
-                        : 'Switch to Light Mode',
-                onPressed: () => _showThemeDialog(context),
-                color: theme.colorScheme.onSurface,
-                hoverColor: theme.colorScheme.primary,
-                size: isMobile ? 18 : 20,
-                useAnimatedSwitcher: true,
-                switcherKey: ValueKey<ThemeMode>(themeProvider.themeMode),
-              ),
-              // Settings button
-              _AnimatedIconButton(
-                icon: Icons.settings,
-                tooltip: 'Settings',
-                onPressed:
-                    () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const SettingsScreen(),
+                        ),
                       ),
                     ),
-                color: theme.colorScheme.onSurface,
-                hoverColor: theme.colorScheme.primary,
-                size: isMobile ? 18 : 20,
+                ],
               ),
-              // Help button for keyboard shortcuts - hide on mobile
-              if (!isMobile)
-                _AnimatedIconButton(
-                  icon: Icons.keyboard,
-                  tooltip: 'Keyboard Shortcuts',
-                  onPressed: () => _showKeyboardShortcutsDialog(context),
-                  color: theme.colorScheme.onSurface,
-                  hoverColor: theme.colorScheme.primary,
-                  size: 20,
-                ),
-              // Stop button - only show when audio is playing
-              if (_currentlyPlayingVoiceId != null)
-                Padding(
-                  padding: EdgeInsets.only(right: isMobile ? 8.0 : 12.0),
-                  child: _AnimatedIconButton(
-                    icon: Icons.stop_rounded,
-                    tooltip: 'Stop playback (Esc)',
-                    onPressed: _stopAllPlayback,
-                    color: Colors.black87,
-                    hoverColor: theme.colorScheme.error,
-                    size: isMobile ? 18 : 20,
-                    useContainer: true,
-                    containerColor: Colors.black.withOpacity(0.08),
-                    containerHoverColor: theme.colorScheme.errorContainer
-                        .withOpacity(0.2),
-                  ),
-                ),
-            ],
-          ),
-          body: Stack(
-            children: [
-              // Main content
-              Focus(
-                autofocus: true,
-                onKeyEvent: (node, event) {
-                  // Handle keyboard shortcuts
-                  if (event is KeyDownEvent) {
-                    // Escape key to stop playback
-                    if (event.logicalKey == LogicalKeyboardKey.escape) {
-                      _stopAllPlayback();
-                      return KeyEventResult.handled;
-                    }
-
-                    // Ctrl+F to open search
-                    if (event.logicalKey == LogicalKeyboardKey.keyF &&
-                        (HardwareKeyboard.instance.isControlPressed ||
-                            HardwareKeyboard.instance.isMetaPressed)) {
-                      _showGlobalSearchDialog(context, avatarProvider);
-                      return KeyEventResult.handled;
-                    }
-
-                    // Ctrl+N to create new avatar
-                    if (event.logicalKey == LogicalKeyboardKey.keyN &&
-                        (HardwareKeyboard.instance.isControlPressed ||
-                            HardwareKeyboard.instance.isMetaPressed)) {
-                      _showAddAvatarDialog(context);
-                      return KeyEventResult.handled;
-                    }
-
-                    // Space to play/pause selected voice
-                    if (event.logicalKey == LogicalKeyboardKey.space) {
-                      // If there's a currently selected avatar, play/pause its first voice
-                      if (avatarProvider.selectedAvatar != null &&
-                          avatarProvider.selectedAvatar!.voices.isNotEmpty) {
-                        _playOrPauseVoice(
-                          avatarProvider.selectedAvatar!.voices.first,
-                        );
-                        return KeyEventResult.handled;
-                      }
-                      return KeyEventResult.ignored;
-                    }
-
-                    // Arrow keys for navigation
-                    if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
-                        event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                      // Navigate between voices in the selected avatar
-                      if (avatarProvider.selectedAvatar != null) {
-                        // Implementation would depend on your UI structure
-                        // This is a placeholder for the navigation logic
-                        HapticFeedback.lightImpact();
-                        return KeyEventResult.handled;
-                      }
-                      return KeyEventResult.ignored;
-                    }
-
-                    if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
-                        event.logicalKey == LogicalKeyboardKey.arrowRight) {
-                      // Navigate between avatars
-                      final avatars = avatarProvider.avatars;
-                      if (avatars.isNotEmpty) {
-                        int currentIndex = -1;
-                        if (avatarProvider.selectedAvatar != null) {
-                          currentIndex = avatars.indexWhere(
-                            (a) => a.id == avatarProvider.selectedAvatar!.id,
-                          );
-                        }
-
-                        int newIndex;
-                        if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-                          // Move to previous avatar
-                          newIndex =
-                              currentIndex > 0
-                                  ? currentIndex - 1
-                                  : avatars.length - 1;
-                        } else {
-                          // Move to next avatar
-                          newIndex = (currentIndex + 1) % avatars.length;
-                        }
-
-                        avatarProvider.setSelectedAvatar(avatars[newIndex].id);
-                        HapticFeedback.lightImpact();
-                        return KeyEventResult.handled;
-                      }
-                      return KeyEventResult.ignored;
-                    }
-                  }
-                  return KeyEventResult.ignored;
-                },
-                child: SafeArea(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: isMobile ? 12.0 : 16.0,
-                    ),
-                    child:
-                        avatarProvider.isLoading
-                            ? _buildLoadingState()
-                            : avatarProvider.errorMessage != null
-                            ? _buildErrorState(avatarProvider.errorMessage!)
-                            : avatarProvider.avatars.isEmpty
-                            ? _buildEmptyState()
-                            : _buildAllAvatarsView(
-                              context,
-                              avatarProvider.avatars,
-                            ),
-                  ),
-                ),
-              ),
-
-              // Deletion overlay
-              if (isDeletingAvatar)
-                Container(
-                  color: theme.colorScheme.surface.withOpacity(0.7),
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(
-                          color: theme.colorScheme.primary,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Deleting avatar...',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w300,
-                            color: theme.colorScheme.onSurface,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Please wait, this may take a moment.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
+            ),
           ),
         );
       },
@@ -447,11 +481,49 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Build view showing all avatars with their voices
   Widget _buildAllAvatarsView(BuildContext context, List<Avatar> avatars) {
-    return ListView.builder(
-      itemCount: avatars.length,
-      itemBuilder: (context, index) {
-        return _buildAvatarWithVoices(context, avatars[index]);
-      },
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
+    final isTablet = screenWidth >= 600 && screenWidth < 1024;
+    final isDesktop = screenWidth >= 1024;
+
+    // Calculate optimal spacing based on screen size
+    final horizontalPadding = isMobile ? 12.0 : (isTablet ? 24.0 : 32.0);
+    final verticalSpacing = isMobile ? 16.0 : 24.0;
+
+    return AnimationLimiter(
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+        child: ListView.builder(
+          itemCount: avatars.length,
+          padding: EdgeInsets.symmetric(vertical: verticalSpacing),
+          itemBuilder: (context, index) {
+            // Calculate stagger delay based on index
+            final staggerDuration = Duration(milliseconds: 50 * index);
+            final animationDuration = const Duration(milliseconds: 600);
+
+            return AnimationConfiguration.staggeredList(
+              position: index,
+              duration: animationDuration,
+              delay: staggerDuration,
+              child: SlideAnimation(
+                verticalOffset: 50.0, // Slide up from 50 pixels below
+                curve: Curves.easeOutCubic,
+                child: ScaleAnimation(
+                  scale: 0.8, // Start at 80% scale
+                  curve: Curves.easeOutBack,
+                  child: FadeInAnimation(
+                    curve: Curves.easeOut,
+                    child: Padding(
+                      padding: EdgeInsets.only(bottom: verticalSpacing),
+                      child: _buildAvatarWithVoices(context, avatars[index]),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 
@@ -774,71 +846,106 @@ class _HomeScreenState extends State<HomeScreen> {
   // Build empty state
   Widget _buildEmptyState() {
     final Color themeColor = Theme.of(context).colorScheme.primary;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth >= 1024;
 
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(28),
-            decoration: BoxDecoration(
-              color: themeColor.withOpacity(0.12),
-              border: Border.all(color: themeColor.withOpacity(0.25), width: 2),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: themeColor.withOpacity(0.1),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                  spreadRadius: 1,
+    return AnimationLimiter(
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: AnimationConfiguration.toStaggeredList(
+            duration: const Duration(milliseconds: 600),
+            childAnimationBuilder:
+                (widget) => SlideAnimation(
+                  verticalOffset: 50.0,
+                  curve: Curves.easeOutCubic,
+                  child: ScaleAnimation(
+                    scale: 0.8,
+                    curve: Curves.easeOutBack,
+                    child: FadeInAnimation(
+                      curve: Curves.easeOut,
+                      child: widget,
+                    ),
+                  ),
                 ),
-              ],
-            ),
-            child: Icon(Icons.record_voice_over, size: 72, color: themeColor),
-          ),
-          const SizedBox(height: 28),
-          Text(
-            'NO AVATARS YET',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 40),
-            child: Text(
-              'Create your first avatar to start building your voice collection',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                height: 1.4,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  color: themeColor.withOpacity(0.12),
+                  border: Border.all(
+                    color: themeColor.withOpacity(0.25),
+                    width: 2,
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: themeColor.withOpacity(0.1),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  Icons.record_voice_over,
+                  size: 72,
+                  color: themeColor,
+                ),
               ),
-            ),
-          ),
-          const SizedBox(height: 36),
-          ElevatedButton.icon(
-            onPressed: () => _showAddAvatarDialog(context),
-            icon: const Icon(Icons.add, size: 20),
-            label: const Text(
-              'CREATE AVATAR',
-              style: TextStyle(fontWeight: FontWeight.w600, letterSpacing: 0.5),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: themeColor,
-              foregroundColor: Theme.of(context).colorScheme.onPrimary,
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+              const SizedBox(height: 28),
+              Text(
+                'NO AVATARS YET',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
               ),
-              elevation: 4,
-            ),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 40),
+                child: Text(
+                  'Create your first avatar to start building your voice collection',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withOpacity(0.7),
+                    height: 1.4,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 36),
+              ElevatedButton.icon(
+                onPressed: () => _showAddAvatarDialog(context),
+                icon: const Icon(Icons.add, size: 20),
+                label: const Text(
+                  'CREATE AVATAR',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: themeColor,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 28,
+                    vertical: 16,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 4,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1229,90 +1336,171 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showThemeDialog(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+
+    // First toggle the theme
     themeProvider.toggleTheme();
+
+    // Force a rebuild of the entire screen with animations
+    setState(() {});
+
+    // Trigger haptic feedback for theme change
+    HapticFeedback.mediumImpact();
+
+    // Show a subtle indicator of the theme change
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              themeProvider.themeMode == ThemeMode.dark
+                  ? Icons.dark_mode
+                  : Icons.light_mode,
+              color: Colors.white,
+              size: 16,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              themeProvider.themeMode == ThemeMode.dark
+                  ? 'Dark mode enabled'
+                  : 'Light mode enabled',
+            ),
+          ],
+        ),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(milliseconds: 1500),
+        animation: CurvedAnimation(
+          parent: const AlwaysStoppedAnimation(1),
+          curve: Curves.easeOutBack,
+        ),
+      ),
+    );
   }
 
   // Build loading state
   Widget _buildLoadingState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircularProgressIndicator(
-            color: Theme.of(context).colorScheme.primary,
+    return AnimationLimiter(
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: AnimationConfiguration.toStaggeredList(
+            duration: const Duration(milliseconds: 600),
+            childAnimationBuilder:
+                (widget) => SlideAnimation(
+                  verticalOffset: 50.0,
+                  curve: Curves.easeOutCubic,
+                  child: ScaleAnimation(
+                    scale: 0.8,
+                    curve: Curves.easeOutBack,
+                    child: FadeInAnimation(
+                      curve: Curves.easeOut,
+                      child: widget,
+                    ),
+                  ),
+                ),
+            children: [
+              CircularProgressIndicator(
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'LOADING YOUR AVATARS',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Please wait while we load your voice collection',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withOpacity(0.7),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 24),
-          Text(
-            'LOADING YOUR AVATARS',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Please wait while we load your voice collection',
-            style: TextStyle(
-              fontSize: 14,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
   // Build error state
   Widget _buildErrorState(String errorMessage) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.error_outline,
-            size: 64,
-            color: Theme.of(context).colorScheme.error,
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'SOMETHING WENT WRONG',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
-              color: Theme.of(context).colorScheme.error,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32.0),
-            child: Text(
-              errorMessage,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+    return AnimationLimiter(
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: AnimationConfiguration.toStaggeredList(
+            duration: const Duration(milliseconds: 600),
+            childAnimationBuilder:
+                (widget) => SlideAnimation(
+                  verticalOffset: 50.0,
+                  curve: Curves.easeOutCubic,
+                  child: ScaleAnimation(
+                    scale: 0.8,
+                    curve: Curves.easeOutBack,
+                    child: FadeInAnimation(
+                      curve: Curves.easeOut,
+                      child: widget,
+                    ),
+                  ),
+                ),
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 64,
+                color: Theme.of(context).colorScheme.error,
               ),
-            ),
+              const SizedBox(height: 24),
+              Text(
+                'SOMETHING WENT WRONG',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                child: Text(
+                  errorMessage,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withOpacity(0.7),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () {
+                  final avatarProvider = Provider.of<AvatarProvider>(
+                    context,
+                    listen: false,
+                  );
+                  avatarProvider.reloadAvatars();
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('TRY AGAIN'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () {
-              final avatarProvider = Provider.of<AvatarProvider>(
-                context,
-                listen: false,
-              );
-              avatarProvider.reloadAvatars();
-            },
-            icon: const Icon(Icons.refresh),
-            label: const Text('TRY AGAIN'),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

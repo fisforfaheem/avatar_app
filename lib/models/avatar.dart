@@ -38,7 +38,36 @@ class Avatar {
 
   /// Generate a random color from a predefined set of colors
   static String _getRandomColor() {
-    const colors = ['blue', 'purple', 'pink', 'orange', 'green', 'teal'];
+    const colors = [
+      // Green Palette
+      'green',
+      'light_green',
+      'forest_green',
+
+      // Orange/Yellow Palette
+      'orange',
+      'amber',
+      'warm_orange',
+      'sand',
+
+      // Blue Palette
+      'blue',
+      'teal',
+      'cyan',
+      'sky_blue',
+      'light_blue',
+
+      // Red/Pink Palette
+      'red',
+      'pink',
+      'coral',
+      'rose',
+
+      // Purple/Indigo Palette
+      'purple',
+      'indigo',
+      'deep_purple',
+    ];
     return colors[DateTime.now().microsecond % colors.length];
   }
 

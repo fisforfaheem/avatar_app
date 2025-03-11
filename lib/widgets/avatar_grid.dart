@@ -61,33 +61,40 @@ class _AvatarGridState extends State<AvatarGrid> {
     // Get the screen width to determine the grid layout
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 900;
-    final crossAxisCount = screenWidth > 1200
-        ? 4
-        : screenWidth > 900
+    final isMobile = screenWidth < 600;
+
+    // Adjust cross axis count based on screen size
+    final crossAxisCount =
+        screenWidth > 1200
+            ? 4
+            : screenWidth > 900
             ? 3
             : screenWidth > 600
-                ? 2
-                : 1;
+            ? 2
+            : 1;
 
     // Calculate a minimum height for the grid based on the number of items
     // This ensures the grid has a size during initial rendering
     final totalItems = widget.avatars.length + 1; // +1 for the "Add" tile
     final rowCount = (totalItems / crossAxisCount).ceil();
     final minHeight =
-        rowCount * 220.0; // 220 is an approximate height per row with spacing
+        rowCount * (isMobile ? 180.0 : 220.0); // Adjust height based on device
 
     return Container(
       // Add a minimum height constraint to ensure the grid has a size
-      constraints: BoxConstraints(
-        minHeight: minHeight,
-      ),
+      constraints: BoxConstraints(minHeight: minHeight),
       child: GridView.count(
         crossAxisCount: crossAxisCount,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        mainAxisSpacing: 20,
-        crossAxisSpacing: 20,
-        childAspectRatio: isDesktop ? 1.1 : 1.2,
+        mainAxisSpacing: isMobile ? 12 : 20,
+        crossAxisSpacing: isMobile ? 12 : 20,
+        childAspectRatio:
+            isDesktop
+                ? 1.1
+                : isMobile
+                ? 1.3
+                : 1.2,
         children: [
           ...widget.avatars.asMap().entries.map((entry) {
             final index = entry.key;
@@ -97,8 +104,10 @@ class _AvatarGridState extends State<AvatarGrid> {
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOut,
               child: TweenAnimationBuilder<double>(
-                tween:
-                    Tween(begin: 20.0, end: _visibleItems > index ? 0.0 : 20.0),
+                tween: Tween(
+                  begin: 20.0,
+                  end: _visibleItems > index ? 0.0 : 20.0,
+                ),
                 duration: const Duration(milliseconds: 300),
                 curve: Curves.easeOut,
                 builder: (context, value, child) {
@@ -118,8 +127,9 @@ class _AvatarGridState extends State<AvatarGrid> {
             curve: Curves.easeOut,
             child: TweenAnimationBuilder<double>(
               tween: Tween(
-                  begin: 20.0,
-                  end: _visibleItems > widget.avatars.length ? 0.0 : 20.0),
+                begin: 20.0,
+                end: _visibleItems > widget.avatars.length ? 0.0 : 20.0,
+              ),
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOut,
               builder: (context, value, child) {
@@ -140,10 +150,7 @@ class _AvatarGridState extends State<AvatarGrid> {
 class AvatarTile extends StatefulWidget {
   final Avatar avatar;
 
-  const AvatarTile({
-    super.key,
-    required this.avatar,
-  });
+  const AvatarTile({super.key, required this.avatar});
 
   @override
   State<AvatarTile> createState() => _AvatarTileState();
@@ -182,23 +189,21 @@ class _AvatarTileState extends State<AvatarTile> {
   @override
   Widget build(BuildContext context) {
     final color = _getColorFromString(widget.avatar.color);
-    final isDesktop = MediaQuery.of(context).size.width > 900;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth > 900;
+    final isMobile = screenWidth < 600;
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: TweenAnimationBuilder<double>(
-        tween: Tween<double>(
-          begin: 0,
-          end: _isHovered && isDesktop ? -5 : 0,
-        ),
+        tween: Tween<double>(begin: 0, end: _isHovered && isDesktop ? -5 : 0),
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOutCubic,
         builder: (context, value, child) {
-          return Transform.translate(
-            offset: Offset(0, value),
-            child: child,
-          );
+          return Transform.translate(offset: Offset(0, value), child: child);
         },
         child: Container(
           decoration: BoxDecoration(
@@ -206,9 +211,12 @@ class _AvatarTileState extends State<AvatarTile> {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: _isHovered && isDesktop
-                    ? color.withOpacity(0.3)
-                    : Colors.black.withOpacity(0.05),
+                color:
+                    _isHovered && isDesktop
+                        ? color.withOpacity(0.3)
+                        : isDarkMode
+                        ? Colors.black.withOpacity(0.2)
+                        : Colors.black.withOpacity(0.05),
                 blurRadius: _isHovered && isDesktop ? 12 : 5,
                 offset: const Offset(0, 3),
                 spreadRadius: _isHovered && isDesktop ? 1 : 0,
@@ -221,13 +229,10 @@ class _AvatarTileState extends State<AvatarTile> {
             clipBehavior: Clip.antiAlias,
             child: InkWell(
               onTap: () {
-                Navigator.pushNamed(
-                  context,
-                  '/avatar/${widget.avatar.id}',
-                );
+                Navigator.pushNamed(context, '/avatar/${widget.avatar.id}');
               },
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: EdgeInsets.all(isMobile ? 12.0 : 16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -236,8 +241,8 @@ class _AvatarTileState extends State<AvatarTile> {
                       children: [
                         // Avatar icon
                         Container(
-                          width: 56,
-                          height: 56,
+                          width: isMobile ? 48 : 56,
+                          height: isMobile ? 48 : 56,
                           decoration: BoxDecoration(
                             color: color,
                             shape: BoxShape.circle,
@@ -246,16 +251,16 @@ class _AvatarTileState extends State<AvatarTile> {
                             child: Icon(
                               widget.avatar.icon,
                               color: Colors.white,
-                              size: 28,
+                              size: isMobile ? 24 : 28,
                             ),
                           ),
                         ),
                         const Spacer(),
                         // Voice count badge
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isMobile ? 8 : 10,
+                            vertical: isMobile ? 3 : 4,
                           ),
                           decoration: BoxDecoration(
                             color: color.withOpacity(0.1),
@@ -266,15 +271,16 @@ class _AvatarTileState extends State<AvatarTile> {
                             children: [
                               Icon(
                                 Icons.mic,
-                                size: 16,
+                                size: isMobile ? 14 : 16,
                                 color: color,
                               ),
-                              const SizedBox(width: 4),
+                              SizedBox(width: isMobile ? 3 : 4),
                               Text(
                                 '${widget.avatar.voices.length}',
                                 style: TextStyle(
                                   color: color,
                                   fontWeight: FontWeight.w500,
+                                  fontSize: isMobile ? 12 : 14,
                                 ),
                               ),
                             ],
@@ -282,29 +288,29 @@ class _AvatarTileState extends State<AvatarTile> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(height: isMobile ? 12 : 16),
                     // Avatar name
                     Text(
                       widget.avatar.name,
-                      style: const TextStyle(
-                        fontSize: 18,
+                      style: TextStyle(
+                        fontSize: isMobile ? 16 : 18,
                         fontWeight: FontWeight.w500,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: isMobile ? 2 : 4),
                     // Last updated
                     Text(
                       'Updated ${_formatDate(widget.avatar.voices.isNotEmpty ? widget.avatar.voices.last.createdAt : DateTime.now())}',
                       style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
+                        fontSize: isMobile ? 10 : 12,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                     const Spacer(),
-                    // View button - only show on hover for desktop
-                    if (_isHovered && isDesktop)
+                    // View button - show on hover for desktop, always show for mobile
+                    if (_isHovered && isDesktop || isMobile)
                       Align(
                         alignment: Alignment.centerRight,
                         child: FilledButton.tonal(
@@ -317,14 +323,17 @@ class _AvatarTileState extends State<AvatarTile> {
                           style: FilledButton.styleFrom(
                             backgroundColor: color.withOpacity(0.1),
                             foregroundColor: color,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isMobile ? 10 : 12,
+                              vertical: isMobile ? 6 : 8,
                             ),
                             minimumSize: Size.zero,
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
-                          child: const Text('View Details'),
+                          child: Text(
+                            'View Details',
+                            style: TextStyle(fontSize: isMobile ? 12 : 14),
+                          ),
                         ),
                       ),
                   ],
@@ -345,10 +354,7 @@ class _AvatarTileState extends State<AvatarTile> {
 class AddAvatarTile extends StatefulWidget {
   final VoidCallback onTap;
 
-  const AddAvatarTile({
-    super.key,
-    required this.onTap,
-  });
+  const AddAvatarTile({super.key, required this.onTap});
 
   @override
   State<AddAvatarTile> createState() => _AddAvatarTileState();
@@ -359,34 +365,37 @@ class _AddAvatarTileState extends State<AddAvatarTile> {
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.of(context).size.width > 900;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth > 900;
+    final isMobile = screenWidth < 600;
     final primaryColor = Theme.of(context).colorScheme.primary;
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: TweenAnimationBuilder<double>(
-        tween: Tween<double>(
-          begin: 0,
-          end: _isHovered && isDesktop ? -5 : 0,
-        ),
+        tween: Tween<double>(begin: 0, end: _isHovered && isDesktop ? -5 : 0),
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOutCubic,
         builder: (context, value, child) {
-          return Transform.translate(
-            offset: Offset(0, value),
-            child: child,
-          );
+          return Transform.translate(offset: Offset(0, value), child: child);
         },
         child: Container(
           decoration: BoxDecoration(
-            color: _isHovered && isDesktop
-                ? primaryColor.withOpacity(0.05)
-                : Theme.of(context).colorScheme.surface,
+            color:
+                _isHovered && isDesktop
+                    ? primaryColor.withOpacity(0.05)
+                    : Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color:
-                  _isHovered && isDesktop ? primaryColor : Colors.grey.shade200,
+                  _isHovered && isDesktop
+                      ? primaryColor
+                      : isDarkMode
+                      ? theme.colorScheme.outline
+                      : Colors.grey.shade200,
               width: 2,
               style: BorderStyle.solid,
             ),
@@ -406,28 +415,28 @@ class _AddAvatarTileState extends State<AddAvatarTile> {
             child: InkWell(
               onTap: widget.onTap,
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: EdgeInsets.all(isMobile ? 12.0 : 16.0),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
-                      width: 64,
-                      height: 64,
+                      width: isMobile ? 56 : 64,
+                      height: isMobile ? 56 : 64,
                       decoration: BoxDecoration(
                         color: primaryColor.withOpacity(0.1),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
                         Icons.add,
-                        size: 32,
+                        size: isMobile ? 28 : 32,
                         color: primaryColor,
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(height: isMobile ? 12 : 16),
                     Text(
                       'Create New Avatar',
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: isMobile ? 14 : 16,
                         fontWeight: FontWeight.w500,
                         color: primaryColor,
                       ),

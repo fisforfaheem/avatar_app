@@ -82,7 +82,7 @@ class _BulkAudioUploaderState extends State<BulkAudioUploader> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowMultiple: true,
-        allowedExtensions: ['mp3', 'wav', 'ogg', 'm4a'],
+        allowedExtensions: ['mp3', 'wav', 'ogg', 'm4a', 'mpeg'],
         withData: true,
       );
 
@@ -117,8 +117,12 @@ class _BulkAudioUploaderState extends State<BulkAudioUploader> {
         }
 
         // Create a temporary file
-        final tempFile = File(path.join(tempDir.path,
-            'temp_${DateTime.now().millisecondsSinceEpoch}_${file.name}'));
+        final tempFile = File(
+          path.join(
+            tempDir.path,
+            'temp_${DateTime.now().millisecondsSinceEpoch}_${file.name}',
+          ),
+        );
 
         // Write the file data
         if (file.bytes != null) {
@@ -218,10 +222,11 @@ class _BulkAudioUploaderState extends State<BulkAudioUploader> {
 
     // Capitalize first letter of each word
     final words = nameWithSpaces.split(' ');
-    final capitalizedWords = words.map((word) {
-      if (word.isEmpty) return '';
-      return word[0].toUpperCase() + word.substring(1);
-    }).toList();
+    final capitalizedWords =
+        words.map((word) {
+          if (word.isEmpty) return '';
+          return word[0].toUpperCase() + word.substring(1);
+        }).toList();
 
     return capitalizedWords.join(' ');
   }
@@ -289,7 +294,8 @@ class _BulkAudioUploaderState extends State<BulkAudioUploader> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                '${voices.length} voice samples have been added successfully'),
+              '${voices.length} voice samples have been added successfully',
+            ),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -408,10 +414,7 @@ class _BulkAudioUploaderState extends State<BulkAudioUploader> {
               if (_audioDetails.isNotEmpty)
                 Text(
                   '${_audioDetails.length} files selected',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.black54,
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.black54),
                 ),
             ],
           ),
@@ -424,58 +427,60 @@ class _BulkAudioUploaderState extends State<BulkAudioUploader> {
               borderRadius: BorderRadius.circular(12),
               child: Container(
                 width: double.infinity,
-                height: 120,
+                height: 125,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: avatarColor.withOpacity(0.05),
                   border: Border.all(color: avatarColor.withOpacity(0.2)),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: _isProcessing
-                    ? Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircularProgressIndicator(
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(avatarColor),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Processing $_processedCount of $_totalCount files...',
-                            style: TextStyle(
-                              color: Colors.black87,
-                              fontSize: 14,
+                child:
+                    _isProcessing
+                        ? Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                avatarColor,
+                              ),
                             ),
-                          ),
-                        ],
-                      )
-                    : Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.upload_file,
-                            size: 40,
-                            color: avatarColor,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Click to select multiple audio files',
-                            style: TextStyle(
-                              color: Colors.black87,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
+                            const SizedBox(height: 12),
+                            Text(
+                              'Processing $_processedCount of $_totalCount files...',
+                              style: TextStyle(
+                                color: Colors.black87,
+                                fontSize: 14,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'MP3, WAV, OGG, or M4A (max 5 minutes each)',
-                            style: TextStyle(
-                              color: Colors.black54,
-                              fontSize: 12,
+                          ],
+                        )
+                        : Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.upload_file,
+                              size: 40,
+                              color: avatarColor,
                             ),
-                          ),
-                        ],
-                      ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Click to select multiple audio files',
+                              style: TextStyle(
+                                color: Colors.black87,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'MP3, WAV, OGG, MPEG, or M4A (max 5 minutes each)',
+                              style: TextStyle(
+                                color: Colors.black54,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
               ),
             )
           else
@@ -483,9 +488,7 @@ class _BulkAudioUploaderState extends State<BulkAudioUploader> {
               children: [
                 // Selected files list
                 Container(
-                  constraints: BoxConstraints(
-                    maxHeight: 300,
-                  ),
+                  constraints: BoxConstraints(maxHeight: 300),
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey.shade200),
                     borderRadius: BorderRadius.circular(8),
@@ -501,15 +504,20 @@ class _BulkAudioUploaderState extends State<BulkAudioUploader> {
 
                       return Container(
                         decoration: BoxDecoration(
-                          border: index < _audioDetails.length - 1
-                              ? Border(
-                                  bottom:
-                                      BorderSide(color: Colors.grey.shade200))
-                              : null,
+                          border:
+                              index < _audioDetails.length - 1
+                                  ? Border(
+                                    bottom: BorderSide(
+                                      color: Colors.grey.shade200,
+                                    ),
+                                  )
+                                  : null,
                         ),
                         child: ListTile(
                           contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 4),
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
                           title: TextFormField(
                             initialValue: name,
                             style: const TextStyle(
@@ -522,8 +530,8 @@ class _BulkAudioUploaderState extends State<BulkAudioUploader> {
                               border: InputBorder.none,
                               hintText: 'Enter voice name',
                             ),
-                            onChanged: (value) =>
-                                _updateAudioName(index, value),
+                            onChanged:
+                                (value) => _updateAudioName(index, value),
                           ),
                           subtitle: Text(
                             '${(file.size / 1024).toStringAsFixed(1)} KB • ${duration.inMinutes}:${(duration.inSeconds % 60).toString().padLeft(2, '0')}',
@@ -533,8 +541,11 @@ class _BulkAudioUploaderState extends State<BulkAudioUploader> {
                             ),
                           ),
                           trailing: IconButton(
-                            icon: Icon(Icons.delete_outline,
-                                color: Colors.red.shade300, size: 20),
+                            icon: Icon(
+                              Icons.delete_outline,
+                              color: Colors.red.shade300,
+                              size: 20,
+                            ),
                             onPressed: () => _removeAudio(index),
                             tooltip: 'Remove',
                             visualDensity: VisualDensity.compact,
@@ -560,8 +571,10 @@ class _BulkAudioUploaderState extends State<BulkAudioUploader> {
                     ),
                   ),
                   style: TextButton.styleFrom(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     backgroundColor: avatarColor.withOpacity(0.1),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -611,29 +624,33 @@ class _BulkAudioUploaderState extends State<BulkAudioUploader> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: avatarColor,
                   foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                child: _isUploading
-                    ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
+                child:
+                    _isUploading
+                        ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
+                        : Text(
+                          'UPLOAD ${_audioDetails.length} FILES',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      )
-                    : Text(
-                        'UPLOAD ${_audioDetails.length} FILES',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
               ),
             ],
           ),

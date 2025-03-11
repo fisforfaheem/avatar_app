@@ -11,21 +11,32 @@ class AvatarsScreen extends StatelessWidget {
     // Get screen dimensions for responsive layout
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 900;
+    final isMobile = screenWidth < 600;
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
 
     return Consumer<AvatarProvider>(
       builder: (context, avatarProvider, child) {
         return Scaffold(
-          appBar: !isDesktop
-              ? AppBar(
-                  title: const Text('Your Avatars'),
-                  centerTitle: false,
-                )
-              : null,
+          appBar:
+              !isDesktop
+                  ? AppBar(
+                    title: const Text('Your Avatars'),
+                    centerTitle: false,
+                    elevation: isDarkMode ? 4 : 0,
+                  )
+                  : null,
           body: CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
               SliverPadding(
-                padding: EdgeInsets.all(isDesktop ? 24.0 : 16.0),
+                padding: EdgeInsets.all(
+                  isDesktop
+                      ? 24.0
+                      : isMobile
+                      ? 12.0
+                      : 16.0,
+                ),
                 sliver: SliverToBoxAdapter(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -44,7 +55,7 @@ class AvatarsScreen extends StatelessWidget {
                           'Manage and customize your digital voice personas',
                           style: TextStyle(
                             fontSize: 16,
-                            color: Colors.grey.shade600,
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
                         const SizedBox(height: 32),
@@ -56,34 +67,34 @@ class AvatarsScreen extends StatelessWidget {
                         children: [
                           Text(
                             'All Avatars (${avatarProvider.avatars.length})',
-                            style: const TextStyle(
-                              fontSize: 20,
+                            style: TextStyle(
+                              fontSize: isMobile ? 18 : 20,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
-                          FilledButton.icon(
-                            icon: const Icon(Icons.add, size: 18),
-                            label: const Text('New Avatar'),
-                            onPressed: () => _showAddAvatarDialog(context),
-                          ),
+                          if (!isMobile)
+                            FilledButton.icon(
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text('New Avatar'),
+                              onPressed: () => _showAddAvatarDialog(context),
+                            ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      SizedBox(height: isMobile ? 12 : 16),
 
                       // Avatar grid
                       avatarProvider.avatars.isEmpty
                           ? _buildEmptyState(context)
                           : SizedBox(
-                              width: double.infinity,
-                              child: AvatarGrid(
-                                avatars: avatarProvider.avatars,
-                                onAddAvatar: () =>
-                                    _showAddAvatarDialog(context),
-                              ),
+                            width: double.infinity,
+                            child: AvatarGrid(
+                              avatars: avatarProvider.avatars,
+                              onAddAvatar: () => _showAddAvatarDialog(context),
                             ),
+                          ),
 
                       // Add some bottom padding
-                      const SizedBox(height: 80),
+                      SizedBox(height: isMobile ? 60 : 80),
                     ],
                   ),
                 ),
@@ -91,12 +102,17 @@ class AvatarsScreen extends StatelessWidget {
             ],
           ),
           // Show FAB only on mobile
-          floatingActionButton: !isDesktop
-              ? FloatingActionButton(
-                  onPressed: () => _showAddAvatarDialog(context),
-                  child: const Icon(Icons.add),
-                )
-              : null,
+          floatingActionButton:
+              !isDesktop
+                  ? FloatingActionButton(
+                    onPressed: () => _showAddAvatarDialog(context),
+                    tooltip: 'Add Avatar',
+                    elevation: isDarkMode ? 4 : 2,
+                    backgroundColor: theme.colorScheme.primary,
+                    foregroundColor: theme.colorScheme.onPrimary,
+                    child: const Icon(Icons.add),
+                  )
+                  : null,
         );
       },
     );
@@ -104,42 +120,49 @@ class AvatarsScreen extends StatelessWidget {
 
   // Build empty state when no avatars exist
   Widget _buildEmptyState(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
+    final theme = Theme.of(context);
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const SizedBox(height: 40),
+          SizedBox(height: isMobile ? 30 : 40),
           Icon(
             Icons.face_outlined,
-            size: 80,
-            color: Colors.grey.shade400,
+            size: isMobile ? 60 : 80,
+            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: isMobile ? 16 : 24),
           Text(
             'No Avatars Yet',
             style: TextStyle(
-              fontSize: 20,
+              fontSize: isMobile ? 18 : 20,
               fontWeight: FontWeight.w500,
-              color: Colors.grey.shade700,
+              color: theme.colorScheme.onSurface,
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: isMobile ? 8 : 12),
           Text(
             'Create your first avatar to get started',
             style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey.shade600,
+              fontSize: isMobile ? 14 : 16,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
-          const SizedBox(height: 32),
+          SizedBox(height: isMobile ? 24 : 32),
           FilledButton.icon(
             onPressed: () => _showAddAvatarDialog(context),
-            icon: const Icon(Icons.add),
-            label: const Text('Create New Avatar'),
+            icon: Icon(Icons.add, size: isMobile ? 16 : 18),
+            label: Text(
+              'Create New Avatar',
+              style: TextStyle(fontSize: isMobile ? 14 : 16),
+            ),
             style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 12,
+              padding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 16 : 24,
+                vertical: isMobile ? 10 : 12,
               ),
             ),
           ),

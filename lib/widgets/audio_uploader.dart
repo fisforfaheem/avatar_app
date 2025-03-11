@@ -5,14 +5,13 @@ import 'package:file_picker/file_picker.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
+import 'package:provider/provider.dart';
+import '../providers/avatar_provider.dart';
 
 class AudioUploader extends StatefulWidget {
   final Function(String name, String audioPath, Duration duration) onUpload;
 
-  const AudioUploader({
-    super.key,
-    required this.onUpload,
-  });
+  const AudioUploader({super.key, required this.onUpload});
 
   @override
   State<AudioUploader> createState() => _AudioUploaderState();
@@ -42,8 +41,9 @@ class _AudioUploaderState extends State<AudioUploader> {
 
   void _setupAudioPlayer() {
     _durationSubscription?.cancel();
-    _durationSubscription =
-        _audioPlayer?.onDurationChanged.listen((Duration d) {
+    _durationSubscription = _audioPlayer?.onDurationChanged.listen((
+      Duration d,
+    ) {
       if (!_isDisposed && mounted) {
         setState(() => _duration = d);
       }
@@ -92,7 +92,7 @@ class _AudioUploaderState extends State<AudioUploader> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowMultiple: false,
-        allowedExtensions: ['mp3', 'wav', 'ogg', 'm4a'],
+        allowedExtensions: ['mp3', 'wav', 'ogg', 'm4a', 'mpeg'],
         withData: true,
       );
 
@@ -115,8 +115,12 @@ class _AudioUploaderState extends State<AudioUploader> {
 
       // Create a temporary file
       final tempDir = await getTemporaryDirectory();
-      final tempFile = File(path.join(tempDir.path,
-          'temp_${DateTime.now().millisecondsSinceEpoch}_${file.name}'));
+      final tempFile = File(
+        path.join(
+          tempDir.path,
+          'temp_${DateTime.now().millisecondsSinceEpoch}_${file.name}',
+        ),
+      );
 
       // Write the file data
       if (file.bytes != null) {
@@ -221,37 +225,35 @@ class _AudioUploaderState extends State<AudioUploader> {
     });
 
     try {
-      // Get the app's documents directory
-      final appDir = await getApplicationDocumentsDirectory();
-      debugPrint('App documents directory: ${appDir.path}');
-
-      // Create a voices subdirectory if it doesn't exist
-      final voicesDir = Directory(path.join(appDir.path, 'voices'));
-      if (!await voicesDir.exists()) {
-        await voicesDir.create(recursive: true);
-      }
-      debugPrint('Voices directory: ${voicesDir.path}');
+      // Get the AvatarProvider
+      final avatarProvider = Provider.of<AvatarProvider>(
+        context,
+        listen: false,
+      );
 
       // Generate unique filename
       final fileName =
           '${DateTime.now().millisecondsSinceEpoch}_${_selectedFile!.name}';
-      final savedFile = File(path.join(voicesDir.path, fileName));
-      debugPrint('Saving file to: ${savedFile.path}');
 
-      // Copy the file from temp location
-      if (_tempFilePath != null) {
-        await File(_tempFilePath!).copy(savedFile.path);
-        debugPrint('File copied successfully');
+      // Get file bytes
+      List<int> fileBytes;
+      if (_selectedFile!.bytes != null) {
+        fileBytes = _selectedFile!.bytes!;
+      } else if (_tempFilePath != null) {
+        fileBytes = await File(_tempFilePath!).readAsBytes();
       } else {
-        throw Exception('No temporary file available');
+        throw Exception('No file data available');
       }
 
+      // Save the file using the AvatarProvider's storage service
+      final savedFilePath = await avatarProvider.saveAudioFile(
+        fileName,
+        fileBytes,
+      );
+      debugPrint('File saved to: $savedFilePath');
+
       if (!_isDisposed && mounted) {
-        widget.onUpload(
-          _nameController.text.trim(),
-          savedFile.path,
-          _duration,
-        );
+        widget.onUpload(_nameController.text.trim(), savedFilePath, _duration);
 
         // Reset form
         _safeSetState(() {
@@ -298,19 +300,28 @@ class _AudioUploaderState extends State<AudioUploader> {
     // Check if both name and file are provided
     final bool isFormValid =
         _nameController.text.trim().isNotEmpty && _selectedFile != null;
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+    final screenSize = MediaQuery.of(context).size;
+    final isMobile = screenSize.width < 600;
 
     return Container(
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.symmetric(vertical: 16),
+      padding: EdgeInsets.all(isMobile ? 12 : 16),
+      margin: EdgeInsets.symmetric(vertical: isMobile ? 8 : 16),
       width: double.infinity,
-      constraints: const BoxConstraints(minHeight: 200),
+      constraints: BoxConstraints(minHeight: isMobile ? 150 : 200),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: Colors.grey.shade200),
+        color: isDarkMode ? theme.colorScheme.surface : Colors.white,
+        border: Border.all(
+          color: isDarkMode ? theme.colorScheme.outline : Colors.grey.shade200,
+        ),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.shade200,
+            color:
+                isDarkMode
+                    ? Colors.black.withOpacity(0.2)
+                    : Colors.grey.shade200,
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -323,26 +334,31 @@ class _AudioUploaderState extends State<AudioUploader> {
           Text(
             'Add New Voice',
             style: TextStyle(
-              fontSize: 18,
+              fontSize: isMobile ? 16 : 18,
               fontWeight: FontWeight.w300,
-              color: Colors.grey[800],
+              color: theme.colorScheme.onSurface,
             ),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: isMobile ? 12 : 16),
           TextField(
             controller: _nameController,
             decoration: InputDecoration(
               labelText: 'Voice Name',
+              labelStyle: TextStyle(color: theme.colorScheme.onSurfaceVariant),
               hintText: 'e.g., Happy Greeting, Introduction, etc.',
-              border: const OutlineInputBorder(),
+              hintStyle: TextStyle(
+                color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               // Add error border when name is empty but file is selected
               errorBorder:
                   _selectedFile != null && _nameController.text.trim().isEmpty
                       ? OutlineInputBorder(
-                          borderSide: BorderSide(
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                        )
+                        borderSide: BorderSide(color: theme.colorScheme.error),
+                        borderRadius: BorderRadius.circular(12),
+                      )
                       : null,
               // Show helper text when name is empty but file is selected
               helperText:
@@ -351,27 +367,43 @@ class _AudioUploaderState extends State<AudioUploader> {
                       : null,
               helperStyle:
                   _selectedFile != null && _nameController.text.trim().isEmpty
-                      ? TextStyle(color: Theme.of(context).colorScheme.error)
+                      ? TextStyle(color: theme.colorScheme.error)
                       : null,
+              filled: isDarkMode,
+              fillColor:
+                  isDarkMode ? theme.colorScheme.surfaceContainerHighest : null,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: isMobile ? 12 : 16,
+              ),
             ),
+            style: TextStyle(color: theme.colorScheme.onSurface),
             enabled: !_isUploading,
-            onChanged: (_) =>
-                _safeSetState(() {}), // Rebuild UI when text changes
+            onChanged:
+                (_) => _safeSetState(() {}), // Rebuild UI when text changes
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: isMobile ? 12 : 16),
           if (_selectedFile == null)
             InkWell(
               onTap: _isUploading ? null : _pickFile,
               child: Container(
                 width: double.infinity,
-                height: 150,
-                padding: const EdgeInsets.all(24),
+                height: isMobile ? 100 : 150,
+                padding: EdgeInsets.all(isMobile ? 16 : 24),
                 decoration: BoxDecoration(
+                  color:
+                      isDarkMode
+                          ? theme.colorScheme.surfaceContainerHighest
+                              .withOpacity(0.5)
+                          : Colors.white,
                   border: Border.all(
                     // Highlight border when name is provided but no file
-                    color: _nameController.text.trim().isNotEmpty
-                        ? Theme.of(context).colorScheme.primary.withOpacity(0.5)
-                        : Colors.grey.shade300,
+                    color:
+                        _nameController.text.trim().isNotEmpty
+                            ? theme.colorScheme.primary.withOpacity(0.5)
+                            : isDarkMode
+                            ? theme.colorScheme.outline
+                            : Colors.grey.shade300,
                     width: 2,
                   ),
                   borderRadius: BorderRadius.circular(12),
@@ -381,12 +413,12 @@ class _AudioUploaderState extends State<AudioUploader> {
                     borderRadius: BorderRadius.circular(12),
                     side: BorderSide(
                       // Highlight border when name is provided but no file
-                      color: _nameController.text.trim().isNotEmpty
-                          ? Theme.of(context)
-                              .colorScheme
-                              .primary
-                              .withOpacity(0.5)
-                          : Colors.grey.shade300,
+                      color:
+                          _nameController.text.trim().isNotEmpty
+                              ? theme.colorScheme.primary.withOpacity(0.5)
+                              : isDarkMode
+                              ? theme.colorScheme.outline
+                              : Colors.grey.shade300,
                       width: 2,
                       strokeAlign: BorderSide.strokeAlignOutside,
                     ),
@@ -398,29 +430,38 @@ class _AudioUploaderState extends State<AudioUploader> {
                   children: [
                     Icon(
                       Icons.upload_file,
-                      size: 48,
+                      size: isMobile ? 36 : 48,
                       // Highlight icon when name is provided but no file
-                      color: _nameController.text.trim().isNotEmpty
-                          ? Theme.of(context)
-                              .colorScheme
-                              .primary
-                              .withOpacity(0.7)
-                          : Colors.grey[400],
+                      color:
+                          _nameController.text.trim().isNotEmpty
+                              ? theme.colorScheme.primary.withOpacity(0.7)
+                              : isDarkMode
+                              ? theme.colorScheme.onSurfaceVariant.withOpacity(
+                                0.5,
+                              )
+                              : Colors.grey[400],
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: isMobile ? 4 : 8),
                     Text(
                       'Click to select an audio file',
                       style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 14,
+                        color:
+                            isDarkMode
+                                ? theme.colorScheme.onSurfaceVariant
+                                : Colors.grey[600],
+                        fontSize: isMobile ? 12 : 14,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: isMobile ? 2 : 4),
                     Text(
-                      'MP3, WAV, OGG, or M4A (max 5 minutes)',
+                      'MP3, WAV, OGG, MPEG, or M4A (max 5 minutes)',
                       style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 12,
+                        color:
+                            isDarkMode
+                                ? theme.colorScheme.onSurfaceVariant
+                                    .withOpacity(0.7)
+                                : Colors.grey[400],
+                        fontSize: isMobile ? 10 : 12,
                       ),
                     ),
                   ],
@@ -430,35 +471,45 @@ class _AudioUploaderState extends State<AudioUploader> {
           else
             Container(
               width: double.infinity,
-              height: 80,
-              padding: const EdgeInsets.all(12),
+              height: isMobile ? 70 : 80,
+              padding: EdgeInsets.all(isMobile ? 8 : 12),
               decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.1),
+                color:
+                    isDarkMode
+                        ? theme.colorScheme.primary.withOpacity(0.15)
+                        : Colors.blue.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
+                border:
+                    isDarkMode
+                        ? Border.all(color: theme.colorScheme.outline)
+                        : null,
               ),
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: const BoxDecoration(
-                      color: Colors.blue,
+                    padding: EdgeInsets.all(isMobile ? 6 : 8),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.audio_file,
-                      size: 16,
-                      color: Colors.white,
+                      size: isMobile ? 14 : 16,
+                      color: theme.colorScheme.onPrimary,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: isMobile ? 8 : 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
                           _selectedFile!.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.w500,
+                            color: theme.colorScheme.onSurface,
+                            fontSize: isMobile ? 13 : 14,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -466,85 +517,131 @@ class _AudioUploaderState extends State<AudioUploader> {
                         Text(
                           '${(_selectedFile!.size / 1024).toStringAsFixed(1)} KB • ${_duration.inMinutes}:${(_duration.inSeconds % 60).toString().padLeft(2, '0')}',
                           style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
+                            fontSize: isMobile ? 11 : 12,
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close),
+                    icon: Icon(Icons.close, size: isMobile ? 18 : 24),
                     onPressed: _isUploading ? null : _handleCancel,
-                    color: Colors.grey[600],
+                    color: theme.colorScheme.onSurfaceVariant,
+                    padding: EdgeInsets.zero,
+                    constraints: BoxConstraints(
+                      minWidth: isMobile ? 32 : 48,
+                      minHeight: isMobile ? 32 : 48,
+                    ),
                   ),
                 ],
               ),
             ),
           if (_errorMessage != null) ...[
-            const SizedBox(height: 8),
+            SizedBox(height: isMobile ? 6 : 8),
             Text(
               _errorMessage!,
               style: TextStyle(
-                color: Theme.of(context).colorScheme.error,
-                fontSize: 12,
+                color: theme.colorScheme.error,
+                fontSize: isMobile ? 11 : 12,
               ),
             ),
           ],
           if (_selectedFile != null) ...[
-            const SizedBox(height: 8),
+            SizedBox(height: isMobile ? 6 : 8),
             Row(
               children: [
                 Icon(
                   Icons.info_outline,
-                  size: 12,
-                  color: Colors.grey[500],
+                  size: isMobile ? 10 : 12,
+                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
                 ),
-                const SizedBox(width: 4),
+                SizedBox(width: isMobile ? 2 : 4),
                 Expanded(
                   child: Text(
-                    'Audio will be stored locally on your device. For better persistence, a cloud storage solution would be needed in a production environment.',
+                    'Audio will be stored locally on your device.',
                     style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[500],
+                      fontSize: isMobile ? 10 : 12,
+                      color: theme.colorScheme.onSurfaceVariant.withOpacity(
+                        0.7,
+                      ),
                     ),
                   ),
                 ),
               ],
             ),
           ],
-          const SizedBox(height: 16),
+          SizedBox(height: isMobile ? 12 : 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               TextButton(
                 onPressed: _isUploading ? null : _handleCancel,
-                child: const Text('Cancel'),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isMobile ? 12 : 16,
+                    vertical: isMobile ? 6 : 8,
+                  ),
+                  minimumSize: Size(isMobile ? 60 : 80, isMobile ? 32 : 36),
+                ),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(
+                    color: theme.colorScheme.primary,
+                    fontSize: isMobile ? 13 : 14,
+                  ),
+                ),
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: isMobile ? 4 : 8),
               FilledButton(
                 onPressed: _isUploading || !isFormValid ? null : _handleSubmit,
                 style: ButtonStyle(
                   // Make the button more prominent when it's enabled
-                  backgroundColor: WidgetStateProperty.resolveWith<Color>(
-                    (Set<WidgetState> states) {
-                      if (states.contains(WidgetState.disabled)) {
-                        return Theme.of(context).disabledColor;
-                      }
-                      return Theme.of(context).colorScheme.primary;
-                    },
-                  ),
+                  backgroundColor: WidgetStateProperty.resolveWith<Color>((
+                    Set<WidgetState> states,
+                  ) {
+                    if (states.contains(WidgetState.disabled)) {
+                      return isDarkMode
+                          ? theme.colorScheme.onSurface.withOpacity(0.12)
+                          : theme.disabledColor;
+                    }
+                    return theme.colorScheme.primary;
+                  }),
+                  foregroundColor: WidgetStateProperty.resolveWith<Color>((
+                    Set<WidgetState> states,
+                  ) {
+                    if (states.contains(WidgetState.disabled)) {
+                      return isDarkMode
+                          ? theme.colorScheme.onSurface.withOpacity(0.38)
+                          : Colors.white70;
+                    }
+                    return theme.colorScheme.onPrimary;
+                  }),
                   padding: WidgetStateProperty.all<EdgeInsets>(
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    EdgeInsets.symmetric(
+                      horizontal: isMobile ? 16 : 24,
+                      vertical: isMobile ? 8 : 12,
+                    ),
                   ),
+                  minimumSize: WidgetStateProperty.all<Size>(
+                    Size(isMobile ? 80 : 100, isMobile ? 32 : 36),
+                  ),
+                  elevation: WidgetStateProperty.resolveWith<double>((
+                    Set<WidgetState> states,
+                  ) {
+                    return isDarkMode ? 4.0 : 2.0;
+                  }),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(_isUploading ? 'Adding...' : 'Add Voice'),
+                    Text(
+                      _isUploading ? 'Adding...' : 'Add Voice',
+                      style: TextStyle(fontSize: isMobile ? 13 : 14),
+                    ),
                     if (isFormValid && !_isUploading) ...[
-                      const SizedBox(width: 8),
-                      const Icon(Icons.check_circle, size: 16),
+                      SizedBox(width: isMobile ? 4 : 8),
+                      Icon(Icons.check_circle, size: isMobile ? 14 : 16),
                     ],
                   ],
                 ),

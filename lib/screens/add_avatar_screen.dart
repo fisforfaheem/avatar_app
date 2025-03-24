@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
 import '../providers/avatar_provider.dart';
 
 class AddAvatarScreen extends StatefulWidget {
@@ -14,6 +16,9 @@ class _AddAvatarScreenState extends State<AddAvatarScreen> {
   final TextEditingController _nameController = TextEditingController();
   late IconData _selectedIcon;
   late String _selectedColor;
+  File? _selectedImage;
+  bool _isImageLoading = false;
+  final ImagePicker _imagePicker = ImagePicker();
 
   @override
   void initState() {
@@ -58,6 +63,46 @@ class _AddAvatarScreenState extends State<AddAvatarScreen> {
     }
   }
 
+  // Pick image from gallery
+  Future<void> _pickImage() async {
+    setState(() {
+      _isImageLoading = true;
+    });
+
+    try {
+      final pickedFile = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 85,
+      );
+
+      if (pickedFile != null) {
+        setState(() {
+          _selectedImage = File(pickedFile.path);
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error picking image: $e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      setState(() {
+        _isImageLoading = false;
+      });
+    }
+  }
+
+  // Remove the selected image
+  void _removeImage() {
+    setState(() {
+      _selectedImage = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final avatarProvider = Provider.of<AvatarProvider>(context, listen: false);
@@ -66,10 +111,10 @@ class _AddAvatarScreenState extends State<AddAvatarScreen> {
     final isDarkMode = theme.brightness == Brightness.dark;
 
     // Function to handle avatar creation
-    void createAvatar() {
-              if (_nameController.text.trim().isEmpty) {
-                // Show error message
-                ScaffoldMessenger.of(context).showSnackBar(
+    void createAvatar() async {
+      if (_nameController.text.trim().isEmpty) {
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               'Please enter a name for your avatar',
@@ -77,19 +122,22 @@ class _AddAvatarScreenState extends State<AddAvatarScreen> {
                 color: isDarkMode ? theme.colorScheme.onInverseSurface : null,
               ),
             ),
-                    behavior: SnackBarBehavior.floating,
+            behavior: SnackBarBehavior.floating,
             backgroundColor:
                 isDarkMode ? theme.colorScheme.inverseSurface : null,
-                  ),
-                );
-                return;
-              }
+          ),
+        );
+        return;
+      }
 
-              Navigator.of(context).pop({
-                'name': _nameController.text.trim(),
-                'icon': _selectedIcon,
-                'color': _selectedColor,
-              });
+      String? imagePath = _selectedImage?.path;
+
+      Navigator.of(context).pop({
+        'name': _nameController.text.trim(),
+        'icon': _selectedIcon,
+        'color': _selectedColor,
+        'imagePath': imagePath,
+      });
     }
 
     // Function to handle cancellation
@@ -99,9 +147,111 @@ class _AddAvatarScreenState extends State<AddAvatarScreen> {
 
     // Build the form section
     Widget buildFormSection() {
+      final theme = Theme.of(context);
+      final isDarkMode = theme.brightness == Brightness.dark;
+
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Image picker section
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            margin: const EdgeInsets.only(bottom: 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Avatar Image (Optional)',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Center(
+                  child: GestureDetector(
+                    onTap: _isImageLoading ? null : _pickImage,
+                    child: Container(
+                      width: 150,
+                      height: 150,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _getColorFromString(
+                            _selectedColor,
+                          ).withOpacity(0.5),
+                          width: 2,
+                        ),
+                      ),
+                      child:
+                          _isImageLoading
+                              ? Center(
+                                child: CircularProgressIndicator(
+                                  color: _getColorFromString(_selectedColor),
+                                ),
+                              )
+                              : _selectedImage != null
+                              ? Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(14),
+                                    child: Image.file(
+                                      _selectedImage!,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 5,
+                                    right: 5,
+                                    child: Material(
+                                      color: Colors.black54,
+                                      shape: const CircleBorder(),
+                                      child: InkWell(
+                                        customBorder: const CircleBorder(),
+                                        onTap: _removeImage,
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(4.0),
+                                          child: Icon(
+                                            Icons.close,
+                                            color: Colors.white,
+                                            size: 18,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              )
+                              : Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.add_photo_alternate_outlined,
+                                    size: 40,
+                                    color: _getColorFromString(
+                                      _selectedColor,
+                                    ).withOpacity(0.7),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Tap to add image',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
           // Name input with animated label
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
@@ -297,7 +447,17 @@ class _AddAvatarScreenState extends State<AddAvatarScreen> {
                   ),
                 ],
               ),
-              child: Icon(_selectedIcon, size: 80, color: Colors.white),
+              child:
+                  _selectedImage != null
+                      ? ClipOval(
+                        child: Image.file(
+                          _selectedImage!,
+                          fit: BoxFit.cover,
+                          width: 160,
+                          height: 160,
+                        ),
+                      )
+                      : Icon(_selectedIcon, size: 80, color: Colors.white),
             ),
             const SizedBox(height: 32),
             // Avatar name preview
@@ -387,26 +547,26 @@ class _AddAvatarScreenState extends State<AddAvatarScreen> {
       autofocus: true,
       onKeyEvent:
           isDesktop
-          ? (node, event) {
-              // Handle keyboard shortcuts for desktop
-              if (event.runtimeType.toString() == 'KeyDownEvent') {
-                // Escape key to cancel
-                if (event.logicalKey == LogicalKeyboardKey.escape) {
-                  cancelCreation();
-                  return KeyEventResult.handled;
-                }
+              ? (node, event) {
+                // Handle keyboard shortcuts for desktop
+                if (event.runtimeType.toString() == 'KeyDownEvent') {
+                  // Escape key to cancel
+                  if (event.logicalKey == LogicalKeyboardKey.escape) {
+                    cancelCreation();
+                    return KeyEventResult.handled;
+                  }
 
                   // Enter key to create
-                if (event.logicalKey == LogicalKeyboardKey.enter &&
-                    (HardwareKeyboard.instance.isControlPressed ||
-                        HardwareKeyboard.instance.isMetaPressed)) {
-                  createAvatar();
-                  return KeyEventResult.handled;
+                  if (event.logicalKey == LogicalKeyboardKey.enter &&
+                      (HardwareKeyboard.instance.isControlPressed ||
+                          HardwareKeyboard.instance.isMetaPressed)) {
+                    createAvatar();
+                    return KeyEventResult.handled;
+                  }
                 }
+                return KeyEventResult.ignored;
               }
-              return KeyEventResult.ignored;
-            }
-          : null,
+              : null,
       child: Scaffold(
         backgroundColor: theme.colorScheme.surface,
         appBar: AppBar(
@@ -430,17 +590,17 @@ class _AddAvatarScreenState extends State<AddAvatarScreen> {
             if (!isDesktop)
               _AnimatedTextButton(
                 text: 'CREATE',
-              onPressed: createAvatar,
+                onPressed: createAvatar,
                 color: _getColorFromString(_selectedColor),
-          ),
-        ],
-      ),
+              ),
+          ],
+        ),
         body:
             isDesktop
                 // Two-column layout for desktop
                 ? Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+                  children: [
                     // Form section (left column)
                     Expanded(
                       flex: 3,
@@ -473,9 +633,9 @@ class _AddAvatarScreenState extends State<AddAvatarScreen> {
                       const SizedBox(height: 32),
                       buildPreviewSection(),
                       const SizedBox(height: 32),
-            ],
-          ),
-        ),
+                    ],
+                  ),
+                ),
       ),
     );
   }
@@ -487,9 +647,9 @@ class _AddAvatarScreenState extends State<AddAvatarScreen> {
     final isDarkMode = theme.brightness == Brightness.dark;
 
     return Container(
-                        height: 200,
-              width: double.infinity,
-              decoration: BoxDecoration(
+      height: 200,
+      width: double.infinity,
+      decoration: BoxDecoration(
         color:
             isDarkMode
                 ? theme.colorScheme.surfaceContainerHighest
@@ -498,77 +658,77 @@ class _AddAvatarScreenState extends State<AddAvatarScreen> {
           color: isDarkMode ? theme.colorScheme.outline : Colors.grey.shade200,
         ),
         borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
+        boxShadow: [
+          BoxShadow(
             color:
                 isDarkMode
                     ? Colors.black.withOpacity(0.2)
                     : Colors.black.withOpacity(0.03),
-                              blurRadius: 4,
-                              spreadRadius: 0,
-                              offset: const Offset(0, 1),
-                            ),
-                          ],
-              ),
-              child: GridView.builder(
-                          padding: const EdgeInsets.all(16),
+            blurRadius: 4,
+            spreadRadius: 0,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: GridView.builder(
+        padding: const EdgeInsets.all(16),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: isDesktop ? 8 : 5,
-                            mainAxisSpacing: 16,
-                            crossAxisSpacing: 16,
-                  childAspectRatio: 1.0,
-                ),
+          crossAxisCount: isDesktop ? 8 : 5,
+          mainAxisSpacing: 16,
+          crossAxisSpacing: 16,
+          childAspectRatio: 1.0,
+        ),
         itemCount: icons.length,
-                itemBuilder: (context, index) {
+        itemBuilder: (context, index) {
           final icon = icons[index];
-                  final isSelected = _selectedIcon == icon;
+          final isSelected = _selectedIcon == icon;
 
-                            return Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                    onTap: () {
-                      setState(() {
-                        _selectedIcon = icon;
-                      });
-                    },
-                                borderRadius: BorderRadius.circular(8),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
+          return Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                setState(() {
+                  _selectedIcon = icon;
+                });
+              },
+              borderRadius: BorderRadius.circular(8),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
                   color:
                       isSelected
                           ? theme.colorScheme.primary.withOpacity(0.1)
                           : isDarkMode
                           ? theme.colorScheme.surface
-                                        : Colors.grey.shade50,
-                                    borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
+                          : Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
                     color:
                         isSelected
-                                          ? theme.colorScheme.primary
+                            ? theme.colorScheme.primary
                             : isDarkMode
                             ? theme.colorScheme.outline
-                                          : Colors.grey.shade300,
-                                      width: isSelected ? 2 : 1,
-                        ),
-                      ),
-                      child: Icon(
-                        icon,
-                        size: 28,
+                            : Colors.grey.shade300,
+                    width: isSelected ? 2 : 1,
+                  ),
+                ),
+                child: Icon(
+                  icon,
+                  size: 28,
                   color:
                       isSelected
-                                        ? theme.colorScheme.primary
+                          ? theme.colorScheme.primary
                           : isDarkMode
                           ? theme.colorScheme.onSurface
-                            : Colors.grey.shade700,
-                                  ),
-                      ),
-                    ),
-                  );
-                },
+                          : Colors.grey.shade700,
+                ),
               ),
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -579,9 +739,9 @@ class _AddAvatarScreenState extends State<AddAvatarScreen> {
     final isDarkMode = theme.brightness == Brightness.dark;
 
     return Container(
-                        height: isDesktop ? 140 : 90,
-              width: double.infinity,
-              decoration: BoxDecoration(
+      height: isDesktop ? 140 : 90,
+      width: double.infinity,
+      decoration: BoxDecoration(
         color:
             isDarkMode
                 ? theme.colorScheme.surfaceContainerHighest
@@ -590,120 +750,120 @@ class _AddAvatarScreenState extends State<AddAvatarScreen> {
           color: isDarkMode ? theme.colorScheme.outline : Colors.grey.shade200,
         ),
         borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
+        boxShadow: [
+          BoxShadow(
             color:
                 isDarkMode
                     ? Colors.black.withOpacity(0.2)
                     : Colors.black.withOpacity(0.03),
-                              blurRadius: 4,
-                              spreadRadius: 0,
-                              offset: const Offset(0, 1),
-                            ),
-                          ],
-                        ),
+            blurRadius: 4,
+            spreadRadius: 0,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
       child:
           isDesktop
-                            // Grid layout for desktop
-                            ? GridView.builder(
-                                padding: const EdgeInsets.all(16),
+              // Grid layout for desktop
+              ? GridView.builder(
+                padding: const EdgeInsets.all(16),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 10,
-                                  mainAxisSpacing: 16,
-                                  crossAxisSpacing: 16,
-                                  childAspectRatio: 1.0,
-                                ),
+                  crossAxisCount: 10,
+                  mainAxisSpacing: 16,
+                  crossAxisSpacing: 16,
+                  childAspectRatio: 1.0,
+                ),
                 itemCount: colors.length,
-                                itemBuilder: (context, index) {
+                itemBuilder: (context, index) {
                   final color = colors[index];
-                                  final isSelected = _selectedColor == color;
+                  final isSelected = _selectedColor == color;
 
-                                  return InkWell(
-                                    onTap: () {
-                                      setState(() {
-                                        _selectedColor = color;
-                                      });
-                                    },
-                                    borderRadius: BorderRadius.circular(30),
-                                    child: AnimatedContainer(
+                  return InkWell(
+                    onTap: () {
+                      setState(() {
+                        _selectedColor = color;
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(30),
+                    child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
-                                      decoration: BoxDecoration(
-                                        color: _getColorFromString(color),
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
+                      decoration: BoxDecoration(
+                        color: _getColorFromString(color),
+                        shape: BoxShape.circle,
+                        border: Border.all(
                           color: isSelected ? Colors.white : Colors.transparent,
-                                          width: 3,
-                                        ),
-                                        boxShadow: [
-                                          BoxShadow(
+                          width: 3,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
                             color: _getColorFromString(
                               color,
                             ).withOpacity(isSelected ? 0.5 : 0.3),
-                                            blurRadius: isSelected ? 12 : 4,
-                                            spreadRadius: isSelected ? 2 : 0,
-                                          ),
-                                        ],
-                                      ),
+                            blurRadius: isSelected ? 12 : 4,
+                            spreadRadius: isSelected ? 2 : 0,
+                          ),
+                        ],
+                      ),
                       child:
                           isSelected
-                                          ? const Icon(
-                                              Icons.check,
-                                              color: Colors.white,
-                                              size: 24,
-                                            )
-                                          : null,
-                                    ),
-                                  );
-                                },
+                              ? const Icon(
+                                Icons.check,
+                                color: Colors.white,
+                                size: 24,
                               )
-                            // Horizontal list for mobile
-                            : ListView.builder(
+                              : null,
+                    ),
+                  );
+                },
+              )
+              // Horizontal list for mobile
+              : ListView.builder(
                 scrollDirection: Axis.horizontal,
-                                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 itemCount: colors.length,
                 itemBuilder: (context, index) {
                   final color = colors[index];
                   final isSelected = _selectedColor == color;
 
                   return Padding(
-                                    padding: const EdgeInsets.only(right: 16),
+                    padding: const EdgeInsets.only(right: 16),
                     child: InkWell(
                       onTap: () {
                         setState(() {
                           _selectedColor = color;
                         });
                       },
-                                      borderRadius: BorderRadius.circular(30),
-                                      child: AnimatedContainer(
+                      borderRadius: BorderRadius.circular(30),
+                      child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
-                                        width: 56,
-                                        height: 56,
+                        width: 56,
+                        height: 56,
                         decoration: BoxDecoration(
                           color: _getColorFromString(color),
                           shape: BoxShape.circle,
                           border: Border.all(
                             color:
                                 isSelected ? Colors.white : Colors.transparent,
-                                            width: 3,
-                                          ),
-                                          boxShadow: [
-                                  BoxShadow(
+                            width: 3,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
                               color: _getColorFromString(
                                 color,
                               ).withOpacity(isSelected ? 0.5 : 0.3),
-                                              blurRadius: isSelected ? 12 : 4,
-                                              spreadRadius: isSelected ? 2 : 0,
-                                            ),
-                                          ],
-                                        ),
+                              blurRadius: isSelected ? 12 : 4,
+                              spreadRadius: isSelected ? 2 : 0,
+                            ),
+                          ],
+                        ),
                         child:
                             isSelected
-                                            ? const Icon(
-                                                Icons.check,
-                                                color: Colors.white,
-                                                size: 24,
-                                              )
-                              : null,
+                                ? const Icon(
+                                  Icons.check,
+                                  color: Colors.white,
+                                  size: 24,
+                                )
+                                : null,
                       ),
                     ),
                   );
@@ -757,8 +917,8 @@ class _AnimatedIconButtonState extends State<_AnimatedIconButton> {
                 scale: 1.0 + (value * 0.2),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
-                          decoration: BoxDecoration(
-          color:
+                  decoration: BoxDecoration(
+                    color:
                         _isHovering
                             ? widget.hoverColor.withOpacity(0.1)
                             : Colors.transparent,
@@ -829,13 +989,13 @@ class _AnimatedTextButtonState extends State<_AnimatedTextButton> {
               scale: 1.0 + (value * 0.05),
               child: Text(
                 widget.text,
-                                  style: TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.5,
                   color: widget.color,
-                                  ),
-                                ),
-        ),
+                ),
+              ),
+            ),
           );
         },
       ),

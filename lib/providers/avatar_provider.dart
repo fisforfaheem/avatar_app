@@ -147,14 +147,46 @@ class AvatarProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void addAvatar(String name, {IconData? icon, String? color}) {
-    final avatar = Avatar(name: name, icon: icon, color: color);
-    _avatars.add(avatar);
-    _saveAvatarsToStorage();
-    notifyListeners();
+  // Add a new avatar
+  Future<Avatar> addAvatar(
+    String name, {
+    IconData? icon,
+    String? color,
+    String? imagePath, // Add support for image path
+  }) async {
+    try {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+
+      final newAvatar = Avatar(
+        name: name,
+        icon: icon,
+        color: color,
+        imagePath: imagePath, // Include image path if provided
+      );
+
+      _avatars.add(newAvatar);
+      await _saveAvatarsToStorage();
+
+      return newAvatar;
+    } catch (e) {
+      _errorMessage = 'Failed to add avatar: ${e.toString()}';
+      debugPrint(_errorMessage);
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
-  void updateAvatar(String id, {String? name, IconData? icon, String? color}) {
+  void updateAvatar(
+    String id, {
+    String? name,
+    IconData? icon,
+    String? color,
+    String? imagePath,
+  }) {
     final avatarIndex = _avatars.indexWhere((avatar) => avatar.id == id);
     if (avatarIndex != -1) {
       final avatar = _avatars[avatarIndex];
@@ -162,6 +194,7 @@ class AvatarProvider with ChangeNotifier {
         name: name,
         icon: icon,
         color: color,
+        imagePath: imagePath,
       );
 
       // Update selected avatar if it's the one being edited

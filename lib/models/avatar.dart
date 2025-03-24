@@ -8,6 +8,7 @@ class Avatar {
   final String color;
   final List<Voice> voices;
   final IconData icon;
+  final String? imagePath; // Path to a custom image file
 
   Avatar({
     String? id,
@@ -15,6 +16,7 @@ class Avatar {
     String? color,
     List<Voice>? voices,
     IconData? icon,
+    this.imagePath, // Optional custom image path
   }) : id = id ?? const Uuid().v4(),
        color = color ?? _getRandomColor(),
        voices = voices ?? [],
@@ -26,6 +28,7 @@ class Avatar {
     String? color,
     List<Voice>? voices,
     IconData? icon,
+    String? imagePath,
   }) {
     return Avatar(
       id: id,
@@ -33,6 +36,7 @@ class Avatar {
       color: color ?? this.color,
       voices: voices ?? this.voices,
       icon: icon ?? this.icon,
+      imagePath: imagePath ?? this.imagePath,
     );
   }
 

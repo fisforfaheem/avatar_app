@@ -1,395 +1,1173 @@
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../providers/avatar_provider.dart';
-import '../models/avatar.dart';
+// import 'dart:io';
+// import 'package:flutter/material.dart';
+// import 'package:flutter/services.dart';
+// import 'package:provider/provider.dart';
+// import 'package:image_picker/image_picker.dart';
+// import '../providers/avatar_provider.dart';
+// import '../models/avatar.dart';
 
-class EditAvatarScreen extends StatefulWidget {
-  final Avatar avatar;
+// class EditAvatarScreen extends StatefulWidget {
+//   final Avatar avatar;
 
-  const EditAvatarScreen({
-    super.key,
-    required this.avatar,
-  });
+//   const EditAvatarScreen({super.key, required this.avatar});
 
-  @override
-  State<EditAvatarScreen> createState() => _EditAvatarScreenState();
-}
+//   @override
+//   State<EditAvatarScreen> createState() => _EditAvatarScreenState();
+// }
 
-class _EditAvatarScreenState extends State<EditAvatarScreen> {
-  late TextEditingController _nameController;
-  late IconData _selectedIcon;
-  late String _selectedColor;
+// class _EditAvatarScreenState extends State<EditAvatarScreen> {
+//   late TextEditingController _nameController;
+//   late IconData _selectedIcon;
+//   late String _selectedColor;
+//   File? _selectedImage;
+//   bool _isImageLoading = false;
+//   final ImagePicker _imagePicker = ImagePicker();
 
-  @override
-  void initState() {
-    super.initState();
-    // Initialize with avatar values
-    _nameController = TextEditingController(text: widget.avatar.name);
-    _selectedIcon = widget.avatar.icon;
-    _selectedColor = widget.avatar.color;
-  }
+//   @override
+//   void initState() {
+//     super.initState();
+//     // Initialize with avatar values
+//     _nameController = TextEditingController(text: widget.avatar.name);
+//     _selectedIcon = widget.avatar.icon;
+//     _selectedColor = widget.avatar.color;
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
-  }
+//     // Initialize the selected image if the avatar has one
+//     if (widget.avatar.imagePath != null) {
+//       _selectedImage = File(widget.avatar.imagePath!);
+//     }
+//   }
 
-  // Helper function to get color from string
-  Color _getColorFromString(String colorName) {
-    switch (colorName) {
-      case 'blue':
-        return const Color(0xFF007AFF); // iOS blue
-      case 'purple':
-        return const Color(0xFF5856D6); // iOS purple
-      case 'pink':
-        return const Color(0xFFFF2D55); // iOS pink
-      case 'orange':
-        return const Color(0xFFFF9500); // iOS orange
-      case 'green':
-        return const Color(0xFF34C759); // iOS green
-      case 'teal':
-        return const Color(0xFF5AC8FA); // iOS teal
-      case 'red':
-        return const Color(0xFFFF3B30); // iOS red
-      case 'amber':
-        return const Color(0xFFFFCC00); // iOS yellow
-      case 'indigo':
-        return const Color(0xFF5E5CE6); // iOS indigo
-      case 'cyan':
-        return const Color(0xFF32ADE6); // iOS cyan
-      default:
-        return const Color(0xFF007AFF); // Default to iOS blue
-    }
-  }
+//   @override
+//   void dispose() {
+//     _nameController.dispose();
+//     super.dispose();
+//   }
 
-  @override
-  Widget build(BuildContext context) {
-    final avatarProvider = Provider.of<AvatarProvider>(context, listen: false);
+//   // Helper function to get color from string
+//   Color _getColorFromString(String colorName) {
+//     switch (colorName) {
+//       case 'blue':
+//         return const Color(0xFF007AFF); // iOS blue
+//       case 'purple':
+//         return const Color(0xFF5856D6); // iOS purple
+//       case 'pink':
+//         return const Color(0xFFFF2D55); // iOS pink
+//       case 'orange':
+//         return const Color(0xFFFF9500); // iOS orange
+//       case 'green':
+//         return const Color(0xFF34C759); // iOS green
+//       case 'teal':
+//         return const Color(0xFF5AC8FA); // iOS teal
+//       case 'red':
+//         return const Color(0xFFFF3B30); // iOS red
+//       case 'amber':
+//         return const Color(0xFFFFCC00); // iOS yellow
+//       case 'indigo':
+//         return const Color(0xFF5E5CE6); // iOS indigo
+//       case 'cyan':
+//         return const Color(0xFF32ADE6); // iOS cyan
+//       default:
+//         return const Color(0xFF007AFF); // Default to iOS blue
+//     }
+//   }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Edit Avatar',
-          style: TextStyle(fontWeight: FontWeight.w300),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              if (_nameController.text.trim().isEmpty) {
-                // Show error message
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Please enter a name for your avatar'),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-                return;
-              }
+//   // Pick image from gallery
+//   Future<void> _pickImage() async {
+//     setState(() {
+//       _isImageLoading = true;
+//     });
 
-              // Update the avatar
-              avatarProvider.updateAvatar(
-                widget.avatar.id,
-                name: _nameController.text.trim(),
-                icon: _selectedIcon,
-                color: _selectedColor,
-              );
+//     try {
+//       final pickedFile = await _imagePicker.pickImage(
+//         source: ImageSource.gallery,
+//         maxWidth: 512,
+//         maxHeight: 512,
+//         imageQuality: 85,
+//       );
 
-              // Return true to indicate the avatar was updated
-              Navigator.of(context).pop(true);
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Name field
-            TextField(
-              controller: _nameController,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Avatar Name',
-                hintText: 'Enter avatar name',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 30),
+//       if (pickedFile != null) {
+//         setState(() {
+//           _selectedImage = File(pickedFile.path);
+//         });
+//       }
+//     } catch (e) {
+//       ScaffoldMessenger.of(context).showSnackBar(
+//         SnackBar(
+//           content: Text('Error picking image: $e'),
+//           behavior: SnackBarBehavior.floating,
+//         ),
+//       );
+//     } finally {
+//       setState(() {
+//         _isImageLoading = false;
+//       });
+//     }
+//   }
 
-            // Icon selection
-            const Text(
-              'Choose an Icon',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 15),
-            Container(
-              height: 200, // Fixed height
-              width: double.infinity,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: GridView.builder(
-                padding: const EdgeInsets.all(12),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 5,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 1.0,
-                ),
-                itemCount: avatarProvider.predefinedIcons.length,
-                itemBuilder: (context, index) {
-                  final icon = avatarProvider.predefinedIcons[index];
-                  final isSelected = _selectedIcon == icon;
+//   // Remove the selected image
+//   void _removeImage() {
+//     setState(() {
+//       _selectedImage = null;
+//     });
+//   }
 
-                  return InkWell(
-                    onTap: () {
-                      setState(() {
-                        _selectedIcon = icon;
-                      });
-                    },
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? Theme.of(context).primaryColor.withOpacity(0.1)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isSelected
-                              ? Theme.of(context).primaryColor
-                              : Colors.transparent,
-                          width: 2,
-                        ),
-                      ),
-                      child: Icon(
-                        icon,
-                        size: 28,
-                        color: isSelected
-                            ? Theme.of(context).primaryColor
-                            : Colors.grey.shade700,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 30),
+//   @override
+//   Widget build(BuildContext context) {
+//     final avatarProvider = Provider.of<AvatarProvider>(context, listen: false);
+//     final isDesktop = MediaQuery.of(context).size.width > 900;
+//     final theme = Theme.of(context);
+//     final isDarkMode = theme.brightness == Brightness.dark;
 
-            // Color selection
-            const Text(
-              'Choose a Color',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 15),
-            Container(
-              height: 80, // Fixed height
-              width: double.infinity,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.all(12),
-                itemCount: avatarProvider.predefinedColors.length,
-                itemBuilder: (context, index) {
-                  final color = avatarProvider.predefinedColors[index];
-                  final isSelected = _selectedColor == color;
+//     // Function to handle avatar update
+//     void updateAvatar() {
+//       if (_nameController.text.trim().isEmpty) {
+//         // Show error message
+//         ScaffoldMessenger.of(context).showSnackBar(
+//           SnackBar(
+//             content: Text(
+//               'Please enter a name for your avatar',
+//               style: TextStyle(
+//                 color: isDarkMode ? theme.colorScheme.onInverseSurface : null,
+//               ),
+//             ),
+//             behavior: SnackBarBehavior.floating,
+//             backgroundColor:
+//                 isDarkMode ? theme.colorScheme.inverseSurface : null,
+//           ),
+//         );
+//         return;
+//       }
 
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: InkWell(
-                      onTap: () {
-                        setState(() {
-                          _selectedColor = color;
-                        });
-                      },
-                      borderRadius: BorderRadius.circular(25),
-                      child: Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: _getColorFromString(color),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color:
-                                isSelected ? Colors.white : Colors.transparent,
-                            width: 2,
-                          ),
-                          boxShadow: isSelected
-                              ? [
-                                  BoxShadow(
-                                    color: _getColorFromString(color)
-                                        .withOpacity(0.5),
-                                    blurRadius: 8,
-                                    spreadRadius: 1,
-                                  )
-                                ]
-                              : null,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
+//       // Update the avatar, including the imagePath
+//       avatarProvider.updateAvatar(
+//         widget.avatar.id,
+//         name: _nameController.text.trim(),
+//         icon: _selectedIcon,
+//         color: _selectedColor,
+//         imagePath: _selectedImage?.path,
+//       );
 
-            // Preview section
-            const SizedBox(height: 40),
-            const Text(
-              'Preview',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 15),
-            Center(
-              child: Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _getColorFromString(_selectedColor),
-                  boxShadow: [
-                    BoxShadow(
-                      color:
-                          _getColorFromString(_selectedColor).withOpacity(0.3),
-                      blurRadius: 12,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  _selectedIcon,
-                  size: 60,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-            const SizedBox(height: 15),
-            Center(
-              child: Text(
-                _nameController.text.isEmpty
-                    ? 'Your Avatar'
-                    : _nameController.text,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w300,
-                ),
-              ),
-            ),
+//       // Return true to indicate the avatar was updated
+//       Navigator.of(context).pop(true);
+//     }
 
-            // Delete button
-            const SizedBox(height: 40),
-            Center(
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  _showDeleteConfirmation(context);
-                },
-                icon: const Icon(Icons.delete_outline, color: Colors.red),
-                label: const Text(
-                  'Delete Avatar',
-                  style: TextStyle(color: Colors.red),
-                ),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.red),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+//     // Function to handle cancellation
+//     void cancelEditing() {
+//       Navigator.of(context).pop();
+//     }
 
-  // Show confirmation dialog before deleting
-  Future<void> _showDeleteConfirmation(BuildContext context) async {
-    final avatarProvider = Provider.of<AvatarProvider>(context, listen: false);
+//     // Build the form section
+//     Widget buildFormSection() {
+//       return Column(
+//         crossAxisAlignment: CrossAxisAlignment.start,
+//         children: [
+//           // Image picker section
+//           AnimatedContainer(
+//             duration: const Duration(milliseconds: 200),
+//             margin: const EdgeInsets.only(bottom: 32),
+//             child: Column(
+//               crossAxisAlignment: CrossAxisAlignment.start,
+//               children: [
+//                 Text(
+//                   'Avatar Image (Optional)',
+//                   style: TextStyle(
+//                     fontSize: 16,
+//                     fontWeight: FontWeight.w600,
+//                     color: theme.colorScheme.onSurface,
+//                   ),
+//                 ),
+//                 const SizedBox(height: 16),
+//                 Center(
+//                   child: GestureDetector(
+//                     onTap: _isImageLoading ? null : _pickImage,
+//                     child: Container(
+//                       width: 150,
+//                       height: 150,
+//                       decoration: BoxDecoration(
+//                         color: theme.colorScheme.surfaceContainerHighest,
+//                         borderRadius: BorderRadius.circular(16),
+//                         border: Border.all(
+//                           color: _getColorFromString(
+//                             _selectedColor,
+//                           ).withOpacity(0.5),
+//                           width: 2,
+//                         ),
+//                       ),
+//                       child:
+//                           _isImageLoading
+//                               ? Center(
+//                                 child: CircularProgressIndicator(
+//                                   color: _getColorFromString(_selectedColor),
+//                                 ),
+//                               )
+//                               : _selectedImage != null
+//                               ? Stack(
+//                                 fit: StackFit.expand,
+//                                 children: [
+//                                   ClipRRect(
+//                                     borderRadius: BorderRadius.circular(14),
+//                                     child: Image.file(
+//                                       _selectedImage!,
+//                                       fit: BoxFit.cover,
+//                                     ),
+//                                   ),
+//                                   Positioned(
+//                                     top: 5,
+//                                     right: 5,
+//                                     child: Material(
+//                                       color: Colors.black54,
+//                                       shape: const CircleBorder(),
+//                                       child: InkWell(
+//                                         customBorder: const CircleBorder(),
+//                                         onTap: _removeImage,
+//                                         child: Padding(
+//                                           padding: const EdgeInsets.all(4.0),
+//                                           child: Icon(
+//                                             Icons.close,
+//                                             color: Colors.white,
+//                                             size: 18,
+//                                           ),
+//                                         ),
+//                                       ),
+//                                     ),
+//                                   ),
+//                                 ],
+//                               )
+//                               : Column(
+//                                 mainAxisAlignment: MainAxisAlignment.center,
+//                                 children: [
+//                                   Icon(
+//                                     Icons.add_photo_alternate_outlined,
+//                                     size: 40,
+//                                     color: _getColorFromString(
+//                                       _selectedColor,
+//                                     ).withOpacity(0.7),
+//                                   ),
+//                                   const SizedBox(height: 8),
+//                                   Text(
+//                                     'Tap to add image',
+//                                     style: TextStyle(
+//                                       fontSize: 14,
+//                                       color: theme.colorScheme.onSurfaceVariant,
+//                                     ),
+//                                   ),
+//                                 ],
+//                               ),
+//                     ),
+//                   ),
+//                 ),
+//               ],
+//             ),
+//           ),
 
-    final shouldDelete = await showModalBottomSheet<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Delete Avatar?',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Are you sure you want to delete "${widget.avatar.name}"? This action cannot be undone.',
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.of(context).pop(false),
-                        child: const Text('Cancel'),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: () => Navigator.of(context).pop(true),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: Colors.red,
-                        ),
-                        child: const Text('Delete'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+//           // Name input with animated label
+//           AnimatedContainer(
+//             duration: const Duration(milliseconds: 200),
+//             margin: const EdgeInsets.only(bottom: 32),
+//             child: Column(
+//               crossAxisAlignment: CrossAxisAlignment.start,
+//               children: [
+//                 Text(
+//                   'Avatar Name',
+//                   style: TextStyle(
+//                     fontSize: 16,
+//                     fontWeight: FontWeight.w600,
+//                     color: theme.colorScheme.onSurface,
+//                   ),
+//                 ),
+//                 const SizedBox(height: 8),
+//                 TextField(
+//                   controller: _nameController,
+//                   autofocus: true,
+//                   decoration: InputDecoration(
+//                     hintText: 'Enter a name for your avatar',
+//                     hintStyle: TextStyle(
+//                       color: theme.colorScheme.onSurfaceVariant,
+//                     ),
+//                     border: OutlineInputBorder(
+//                       borderRadius: BorderRadius.circular(12),
+//                       borderSide: BorderSide(
+//                         color: theme.colorScheme.outline,
+//                         width: 1.5,
+//                       ),
+//                     ),
+//                     enabledBorder: OutlineInputBorder(
+//                       borderRadius: BorderRadius.circular(12),
+//                       borderSide: BorderSide(
+//                         color: theme.colorScheme.outline.withOpacity(0.7),
+//                         width: 1.5,
+//                       ),
+//                     ),
+//                     focusedBorder: OutlineInputBorder(
+//                       borderRadius: BorderRadius.circular(12),
+//                       borderSide: BorderSide(
+//                         color: _getColorFromString(_selectedColor),
+//                         width: 2,
+//                       ),
+//                     ),
+//                     filled: true,
+//                     fillColor:
+//                         isDarkMode
+//                             ? theme.colorScheme.surfaceContainerHighest
+//                             : theme.colorScheme.surface,
+//                     contentPadding: const EdgeInsets.symmetric(
+//                       horizontal: 16,
+//                       vertical: 16,
+//                     ),
+//                     prefixIcon: Icon(
+//                       Icons.person_outline,
+//                       color: theme.colorScheme.onSurfaceVariant,
+//                     ),
+//                   ),
+//                   style: TextStyle(
+//                     color: theme.colorScheme.onSurface,
+//                     fontSize: 16,
+//                   ),
+//                   onSubmitted: (_) => updateAvatar(),
+//                 ),
+//               ],
+//             ),
+//           ),
 
-    if (shouldDelete == true) {
-      // Delete the avatar
-      avatarProvider.removeAvatar(widget.avatar.id);
+//           // Icon selection
+//           AnimatedContainer(
+//             duration: const Duration(milliseconds: 200),
+//             margin: const EdgeInsets.only(bottom: 32),
+//             child: Column(
+//               crossAxisAlignment: CrossAxisAlignment.start,
+//               children: [
+//                 Text(
+//                   'Chooooose an Icon',
+//                   style: TextStyle(
+//                     fontSize: 16,
+//                     fontWeight: FontWeight.w600,
+//                     color: theme.colorScheme.onSurface,
+//                   ),
+//                 ),
+//                 const SizedBox(height: 16),
+//                 _buildIconGrid(avatarProvider.predefinedIcons),
+//               ],
+//             ),
+//           ),
 
-      if (context.mounted) {
-        // Return to previous screen
-        Navigator.of(context).pop(true);
+//           // Color selection
+//           AnimatedContainer(
+//             duration: const Duration(milliseconds: 200),
+//             margin: const EdgeInsets.only(bottom: 32),
+//             child: Column(
+//               crossAxisAlignment: CrossAxisAlignment.start,
+//               children: [
+//                 Text(
+//                   'Choose a Color',
+//                   style: TextStyle(
+//                     fontSize: 16,
+//                     fontWeight: FontWeight.w600,
+//                     color: theme.colorScheme.onSurface,
+//                   ),
+//                 ),
+//                 const SizedBox(height: 16),
+//                 _buildColorGrid(avatarProvider.predefinedColors),
+//               ],
+//             ),
+//           ),
 
-        // Show confirmation
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Avatar "${widget.avatar.name}" has been deleted.'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
-  }
-}
+//           // Delete avatar button (for non-desktop only)
+//           if (!isDesktop)
+//             Center(
+//               child: SizedBox(
+//                 width: double.infinity,
+//                 child: OutlinedButton.icon(
+//                   onPressed: () => _showDeleteConfirmation(context),
+//                   icon: const Icon(Icons.delete_outline, color: Colors.red),
+//                   label: const Text(
+//                     'DELETE AVATAR',
+//                     style: TextStyle(
+//                       fontWeight: FontWeight.w600,
+//                       letterSpacing: 0.5,
+//                       color: Colors.red,
+//                     ),
+//                   ),
+//                   style: OutlinedButton.styleFrom(
+//                     side: const BorderSide(color: Colors.red, width: 1.5),
+//                     padding: const EdgeInsets.symmetric(vertical: 16),
+//                     shape: RoundedRectangleBorder(
+//                       borderRadius: BorderRadius.circular(12),
+//                     ),
+//                   ),
+//                 ),
+//               ),
+//             ),
+
+//           // Save button (for mobile)
+//           if (!isDesktop)
+//             Container(
+//               margin: const EdgeInsets.only(top: 20),
+//               width: double.infinity,
+//               child: ElevatedButton(
+//                 onPressed: updateAvatar,
+//                 style: ElevatedButton.styleFrom(
+//                   backgroundColor: _getColorFromString(_selectedColor),
+//                   foregroundColor: theme.colorScheme.onPrimary,
+//                   padding: const EdgeInsets.symmetric(vertical: 16),
+//                   shape: RoundedRectangleBorder(
+//                     borderRadius: BorderRadius.circular(12),
+//                   ),
+//                   elevation: isDarkMode ? 4 : 2,
+//                 ),
+//                 child: const Text(
+//                   'SAVE CHANGES',
+//                   style: TextStyle(
+//                     fontWeight: FontWeight.w600,
+//                     letterSpacing: 0.5,
+//                   ),
+//                 ),
+//               ),
+//             ),
+//         ],
+//       );
+//     }
+
+//     // Build the preview section
+//     Widget buildPreviewSection() {
+//       return AnimatedContainer(
+//         duration: const Duration(milliseconds: 300),
+//         curve: Curves.easeOutBack,
+//         padding: const EdgeInsets.all(24),
+//         decoration: BoxDecoration(
+//           color:
+//               isDarkMode
+//                   ? theme.colorScheme.surfaceContainerHighest
+//                   : theme.colorScheme.surface,
+//           borderRadius: BorderRadius.circular(24),
+//           border: Border.all(
+//             color: _getColorFromString(_selectedColor).withOpacity(0.3),
+//             width: 2,
+//           ),
+//           boxShadow: [
+//             BoxShadow(
+//               color: _getColorFromString(_selectedColor).withOpacity(0.2),
+//               blurRadius: 20,
+//               spreadRadius: 0,
+//               offset: const Offset(0, 10),
+//             ),
+//           ],
+//         ),
+//         child: Column(
+//           mainAxisAlignment: MainAxisAlignment.center,
+//           children: [
+//             Text(
+//               'Preview',
+//               style: TextStyle(
+//                 fontSize: 18,
+//                 fontWeight: FontWeight.w600,
+//                 color: theme.colorScheme.onSurface,
+//                 letterSpacing: 0.5,
+//               ),
+//             ),
+//             const SizedBox(height: 32),
+//             // Avatar preview with animated container
+//             AnimatedContainer(
+//               duration: const Duration(milliseconds: 300),
+//               curve: Curves.easeOutBack,
+//               width: 160,
+//               height: 160,
+//               decoration: BoxDecoration(
+//                 shape: BoxShape.circle,
+//                 color: _getColorFromString(_selectedColor),
+//                 boxShadow: [
+//                   BoxShadow(
+//                     color: _getColorFromString(_selectedColor).withOpacity(0.4),
+//                     blurRadius: 24,
+//                     spreadRadius: 4,
+//                     offset: const Offset(0, 8),
+//                   ),
+//                 ],
+//               ),
+//               child:
+//                   _selectedImage != null
+//                       ? ClipOval(
+//                         child: Image.file(
+//                           _selectedImage!,
+//                           fit: BoxFit.cover,
+//                           width: 160,
+//                           height: 160,
+//                         ),
+//                       )
+//                       : Icon(_selectedIcon, size: 80, color: Colors.white),
+//             ),
+//             const SizedBox(height: 32),
+//             // Avatar name preview
+//             AnimatedDefaultTextStyle(
+//               duration: const Duration(milliseconds: 200),
+//               style: TextStyle(
+//                 fontSize: 28,
+//                 fontWeight: FontWeight.w600,
+//                 color: theme.colorScheme.onSurface,
+//                 letterSpacing: 0.5,
+//               ),
+//               child: Text(
+//                 _nameController.text.isEmpty
+//                     ? 'Your Avatar'
+//                     : _nameController.text,
+//               ),
+//             ),
+//             const SizedBox(height: 16),
+//             Text(
+//               'This is how your avatar will appear in the app',
+//               textAlign: TextAlign.center,
+//               style: TextStyle(
+//                 fontSize: 14,
+//                 color: theme.colorScheme.onSurfaceVariant,
+//               ),
+//             ),
+//             if (isDesktop) ...[
+//               const SizedBox(height: 48),
+//               // Save button for desktop in preview section
+//               SizedBox(
+//                 width: double.infinity,
+//                 child: ElevatedButton(
+//                   onPressed: updateAvatar,
+//                   style: ElevatedButton.styleFrom(
+//                     backgroundColor: _getColorFromString(_selectedColor),
+//                     foregroundColor: Colors.white,
+//                     padding: const EdgeInsets.symmetric(vertical: 16),
+//                     shape: RoundedRectangleBorder(
+//                       borderRadius: BorderRadius.circular(12),
+//                     ),
+//                     elevation: 4,
+//                   ),
+//                   child: const Text(
+//                     'SAVE CHANGES',
+//                     style: TextStyle(
+//                       fontWeight: FontWeight.w600,
+//                       letterSpacing: 0.5,
+//                       fontSize: 16,
+//                     ),
+//                   ),
+//                 ),
+//               ),
+//               const SizedBox(height: 16),
+//               // Cancel button for desktop
+//               SizedBox(
+//                 width: double.infinity,
+//                 child: OutlinedButton(
+//                   onPressed: cancelEditing,
+//                   style: OutlinedButton.styleFrom(
+//                     foregroundColor: theme.colorScheme.onSurface,
+//                     padding: const EdgeInsets.symmetric(vertical: 16),
+//                     side: BorderSide(
+//                       color: theme.colorScheme.outline,
+//                       width: 1.5,
+//                     ),
+//                     shape: RoundedRectangleBorder(
+//                       borderRadius: BorderRadius.circular(12),
+//                     ),
+//                   ),
+//                   child: const Text(
+//                     'CANCEL',
+//                     style: TextStyle(
+//                       fontWeight: FontWeight.w600,
+//                       letterSpacing: 0.5,
+//                       fontSize: 16,
+//                     ),
+//                   ),
+//                 ),
+//               ),
+//               const SizedBox(height: 20),
+//               // Delete button for desktop
+//               SizedBox(
+//                 width: double.infinity,
+//                 child: OutlinedButton.icon(
+//                   onPressed: () => _showDeleteConfirmation(context),
+//                   icon: const Icon(Icons.delete_outline, color: Colors.red),
+//                   label: const Text(
+//                     'DELETE AVATAR',
+//                     style: TextStyle(
+//                       fontWeight: FontWeight.w600,
+//                       letterSpacing: 0.5,
+//                       color: Colors.red,
+//                     ),
+//                   ),
+//                   style: OutlinedButton.styleFrom(
+//                     foregroundColor: Colors.red,
+//                     padding: const EdgeInsets.symmetric(vertical: 16),
+//                     side: const BorderSide(color: Colors.red, width: 1.5),
+//                     shape: RoundedRectangleBorder(
+//                       borderRadius: BorderRadius.circular(12),
+//                     ),
+//                   ),
+//                 ),
+//               ),
+//             ],
+//           ],
+//         ),
+//       );
+//     }
+
+//     return Focus(
+//       autofocus: true,
+//       onKeyEvent:
+//           isDesktop
+//               ? (node, event) {
+//                 // Handle keyboard shortcuts for desktop
+//                 if (event.runtimeType.toString() == 'KeyDownEvent') {
+//                   // Escape key to cancel
+//                   if (event.logicalKey == LogicalKeyboardKey.escape) {
+//                     cancelEditing();
+//                     return KeyEventResult.handled;
+//                   }
+
+//                   // Enter key to save
+//                   if (event.logicalKey == LogicalKeyboardKey.enter &&
+//                       (HardwareKeyboard.instance.isControlPressed ||
+//                           HardwareKeyboard.instance.isMetaPressed)) {
+//                     updateAvatar();
+//                     return KeyEventResult.handled;
+//                   }
+//                 }
+//                 return KeyEventResult.ignored;
+//               }
+//               : null,
+//       child: Scaffold(
+//         backgroundColor: theme.colorScheme.surface,
+//         appBar: AppBar(
+//           title: Text(
+//             'Edit Avatar',
+//             style: TextStyle(
+//               fontWeight: FontWeight.w600,
+//               color: theme.colorScheme.onSurface,
+//             ),
+//           ),
+//           backgroundColor: Colors.transparent,
+//           elevation: 0,
+//           leading: _AnimatedIconButton(
+//             icon: Icons.arrow_back,
+//             color: theme.colorScheme.onSurface,
+//             hoverColor: _getColorFromString(_selectedColor),
+//             onPressed: () => Navigator.of(context).pop(),
+//             tooltip: 'Back',
+//           ),
+//           actions: [
+//             if (!isDesktop)
+//               _AnimatedTextButton(
+//                 text: 'SAVE',
+//                 onPressed: updateAvatar,
+//                 color: _getColorFromString(_selectedColor),
+//               ),
+//           ],
+//         ),
+//         body:
+//             isDesktop
+//                 // Two-column layout for desktop
+//                 ? Row(
+//                   crossAxisAlignment: CrossAxisAlignment.stretch,
+//                   children: [
+//                     // Form section (left column)
+//                     Expanded(
+//                       flex: 3,
+//                       child: SingleChildScrollView(
+//                         padding: const EdgeInsets.all(32.0),
+//                         child: buildFormSection(),
+//                       ),
+//                     ),
+//                     // Preview section (right column)
+//                     Expanded(
+//                       flex: 2,
+//                       child: Container(
+//                         color:
+//                             isDarkMode
+//                                 ? theme.colorScheme.surfaceContainerLow
+//                                 : theme.colorScheme.surfaceContainerLowest,
+//                         padding: const EdgeInsets.all(32.0),
+//                         child: Center(child: buildPreviewSection()),
+//                       ),
+//                     ),
+//                   ],
+//                 )
+//                 // Single column layout for mobile
+//                 : SingleChildScrollView(
+//                   padding: const EdgeInsets.all(24.0),
+//                   child: Column(
+//                     crossAxisAlignment: CrossAxisAlignment.start,
+//                     children: [
+//                       buildFormSection(),
+//                       const SizedBox(height: 32),
+//                       buildPreviewSection(),
+//                       const SizedBox(height: 32),
+//                     ],
+//                   ),
+//                 ),
+//       ),
+//     );
+//   }
+
+//   // Show confirmation dialog before deleting
+//   Future<void> _showDeleteConfirmation(BuildContext context) async {
+//     final avatarProvider = Provider.of<AvatarProvider>(context, listen: false);
+//     final theme = Theme.of(context);
+//     final isDarkMode = theme.brightness == Brightness.dark;
+//     final isDesktop = MediaQuery.of(context).size.width > 900;
+
+//     final shouldDelete = await showDialog<bool>(
+//       context: context,
+//       builder: (BuildContext context) {
+//         return AlertDialog(
+//           title: Text(
+//             'Delete Avatar',
+//             style: TextStyle(
+//               fontWeight: FontWeight.w600,
+//               color: theme.colorScheme.onSurface,
+//             ),
+//           ),
+//           content: Column(
+//             mainAxisSize: MainAxisSize.min,
+//             crossAxisAlignment: CrossAxisAlignment.start,
+//             children: [
+//               Text(
+//                 'Are you sure you want to delete "${widget.avatar.name}"?',
+//                 style: TextStyle(
+//                   fontSize: 16,
+//                   color: theme.colorScheme.onSurface,
+//                 ),
+//               ),
+//               const SizedBox(height: 12),
+//               Text(
+//                 'This will permanently delete this avatar and all associated voice recordings. This action cannot be undone.',
+//                 style: TextStyle(
+//                   fontSize: 14,
+//                   color: theme.colorScheme.onSurfaceVariant,
+//                 ),
+//               ),
+//               const SizedBox(height: 24),
+//               if (widget.avatar.voices.isNotEmpty)
+//                 Container(
+//                   padding: const EdgeInsets.all(12),
+//                   decoration: BoxDecoration(
+//                     color: theme.colorScheme.errorContainer.withOpacity(0.3),
+//                     borderRadius: BorderRadius.circular(8),
+//                     border: Border.all(
+//                       color: theme.colorScheme.error.withOpacity(0.3),
+//                     ),
+//                   ),
+//                   child: Row(
+//                     children: [
+//                       Icon(
+//                         Icons.warning_amber_rounded,
+//                         color: theme.colorScheme.error,
+//                         size: 20,
+//                       ),
+//                       const SizedBox(width: 12),
+//                       Expanded(
+//                         child: Text(
+//                           'This avatar has ${widget.avatar.voices.length} voice recordings that will also be deleted.',
+//                           style: TextStyle(
+//                             fontSize: 14,
+//                             color: theme.colorScheme.error,
+//                             fontWeight: FontWeight.w500,
+//                           ),
+//                         ),
+//                       ),
+//                     ],
+//                   ),
+//                 ),
+//             ],
+//           ),
+//           actions: [
+//             TextButton(
+//               onPressed: () => Navigator.of(context).pop(false),
+//               style: TextButton.styleFrom(
+//                 foregroundColor: theme.colorScheme.onSurface,
+//               ),
+//               child: const Text('CANCEL'),
+//             ),
+//             TextButton(
+//               onPressed: () => Navigator.of(context).pop(true),
+//               style: TextButton.styleFrom(
+//                 foregroundColor: theme.colorScheme.error,
+//               ),
+//               child: const Text('DELETE'),
+//             ),
+//           ],
+//         );
+//       },
+//     );
+
+//     if (shouldDelete == true) {
+//       // Delete the avatar
+//       avatarProvider.removeAvatar(widget.avatar.id);
+
+//       if (context.mounted) {
+//         // Return to previous screen
+//         Navigator.of(context).pop(true);
+
+//         // Show confirmation
+//         ScaffoldMessenger.of(context).showSnackBar(
+//           SnackBar(
+//             content: Text('Avatar "${widget.avatar.name}" has been deleted.'),
+//             behavior: SnackBarBehavior.floating,
+//           ),
+//         );
+//       }
+//     }
+//   }
+
+//   Widget _buildIconGrid(List<IconData> icons) {
+//     final isDesktop = MediaQuery.of(context).size.width > 900;
+//     final theme = Theme.of(context);
+//     final isDarkMode = theme.brightness == Brightness.dark;
+
+//     return Container(
+//       height: 200,
+//       width: double.infinity,
+//       decoration: BoxDecoration(
+//         color:
+//             isDarkMode
+//                 ? theme.colorScheme.surfaceContainerHighest
+//                 : Colors.white,
+//         border: Border.all(
+//           color: isDarkMode ? theme.colorScheme.outline : Colors.grey.shade200,
+//         ),
+//         borderRadius: BorderRadius.circular(12),
+//         boxShadow: [
+//           BoxShadow(
+//             color:
+//                 isDarkMode
+//                     ? Colors.black.withOpacity(0.2)
+//                     : Colors.black.withOpacity(0.03),
+//             blurRadius: 4,
+//             spreadRadius: 0,
+//             offset: const Offset(0, 1),
+//           ),
+//         ],
+//       ),
+//       child: GridView.builder(
+//         padding: const EdgeInsets.all(16),
+//         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+//           crossAxisCount: isDesktop ? 8 : 5,
+//           mainAxisSpacing: 16,
+//           crossAxisSpacing: 16,
+//           childAspectRatio: 1.0,
+//         ),
+//         itemCount: icons.length,
+//         itemBuilder: (context, index) {
+//           final icon = icons[index];
+//           final isSelected = _selectedIcon == icon;
+
+//           return Material(
+//             color: Colors.transparent,
+//             child: InkWell(
+//               onTap: () {
+//                 setState(() {
+//                   _selectedIcon = icon;
+//                 });
+//               },
+//               borderRadius: BorderRadius.circular(8),
+//               child: AnimatedContainer(
+//                 duration: const Duration(milliseconds: 200),
+//                 width: 50,
+//                 height: 50,
+//                 decoration: BoxDecoration(
+//                   color:
+//                       isSelected
+//                           ? theme.colorScheme.primary.withOpacity(0.1)
+//                           : isDarkMode
+//                           ? theme.colorScheme.surface
+//                           : Colors.grey.shade50,
+//                   borderRadius: BorderRadius.circular(8),
+//                   border: Border.all(
+//                     color:
+//                         isSelected
+//                             ? theme.colorScheme.primary
+//                             : isDarkMode
+//                             ? theme.colorScheme.outline
+//                             : Colors.grey.shade300,
+//                     width: isSelected ? 2 : 1,
+//                   ),
+//                 ),
+//                 child: Icon(
+//                   icon,
+//                   size: 28,
+//                   color:
+//                       isSelected
+//                           ? theme.colorScheme.primary
+//                           : isDarkMode
+//                           ? theme.colorScheme.onSurface
+//                           : Colors.grey.shade700,
+//                 ),
+//               ),
+//             ),
+//           );
+//         },
+//       ),
+//     );
+//   }
+
+//   Widget _buildColorGrid(List<String> colors) {
+//     final isDesktop = MediaQuery.of(context).size.width > 900;
+//     final theme = Theme.of(context);
+//     final isDarkMode = theme.brightness == Brightness.dark;
+
+//     return Container(
+//       height: isDesktop ? 140 : 90,
+//       width: double.infinity,
+//       decoration: BoxDecoration(
+//         color:
+//             isDarkMode
+//                 ? theme.colorScheme.surfaceContainerHighest
+//                 : Colors.white,
+//         border: Border.all(
+//           color: isDarkMode ? theme.colorScheme.outline : Colors.grey.shade200,
+//         ),
+//         borderRadius: BorderRadius.circular(12),
+//         boxShadow: [
+//           BoxShadow(
+//             color:
+//                 isDarkMode
+//                     ? Colors.black.withOpacity(0.2)
+//                     : Colors.black.withOpacity(0.03),
+//             blurRadius: 4,
+//             spreadRadius: 0,
+//             offset: const Offset(0, 1),
+//           ),
+//         ],
+//       ),
+//       child:
+//           isDesktop
+//               // Grid layout for desktop
+//               ? GridView.builder(
+//                 padding: const EdgeInsets.all(16),
+//                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+//                   crossAxisCount: 10,
+//                   mainAxisSpacing: 16,
+//                   crossAxisSpacing: 16,
+//                   childAspectRatio: 1.0,
+//                 ),
+//                 itemCount: colors.length,
+//                 itemBuilder: (context, index) {
+//                   final color = colors[index];
+//                   final isSelected = _selectedColor == color;
+
+//                   return InkWell(
+//                     onTap: () {
+//                       setState(() {
+//                         _selectedColor = color;
+//                       });
+//                     },
+//                     borderRadius: BorderRadius.circular(30),
+//                     child: AnimatedContainer(
+//                       duration: const Duration(milliseconds: 200),
+//                       decoration: BoxDecoration(
+//                         color: _getColorFromString(color),
+//                         shape: BoxShape.circle,
+//                         border: Border.all(
+//                           color: isSelected ? Colors.white : Colors.transparent,
+//                           width: 3,
+//                         ),
+//                         boxShadow: [
+//                           BoxShadow(
+//                             color: _getColorFromString(
+//                               color,
+//                             ).withOpacity(isSelected ? 0.5 : 0.3),
+//                             blurRadius: isSelected ? 12 : 4,
+//                             spreadRadius: isSelected ? 2 : 0,
+//                           ),
+//                         ],
+//                       ),
+//                       child:
+//                           isSelected
+//                               ? const Icon(
+//                                 Icons.check,
+//                                 color: Colors.white,
+//                                 size: 24,
+//                               )
+//                               : null,
+//                     ),
+//                   );
+//                 },
+//               )
+//               // Horizontal list for mobile
+//               : ListView.builder(
+//                 scrollDirection: Axis.horizontal,
+//                 padding: const EdgeInsets.all(16),
+//                 itemCount: colors.length,
+//                 itemBuilder: (context, index) {
+//                   final color = colors[index];
+//                   final isSelected = _selectedColor == color;
+
+//                   return Padding(
+//                     padding: const EdgeInsets.only(right: 16),
+//                     child: InkWell(
+//                       onTap: () {
+//                         setState(() {
+//                           _selectedColor = color;
+//                         });
+//                       },
+//                       borderRadius: BorderRadius.circular(30),
+//                       child: AnimatedContainer(
+//                         duration: const Duration(milliseconds: 200),
+//                         width: 56,
+//                         height: 56,
+//                         decoration: BoxDecoration(
+//                           color: _getColorFromString(color),
+//                           shape: BoxShape.circle,
+//                           border: Border.all(
+//                             color:
+//                                 isSelected ? Colors.white : Colors.transparent,
+//                             width: 3,
+//                           ),
+//                           boxShadow: [
+//                             BoxShadow(
+//                               color: _getColorFromString(
+//                                 color,
+//                               ).withOpacity(isSelected ? 0.5 : 0.3),
+//                               blurRadius: isSelected ? 12 : 4,
+//                               spreadRadius: isSelected ? 2 : 0,
+//                             ),
+//                           ],
+//                         ),
+//                         child:
+//                             isSelected
+//                                 ? const Icon(
+//                                   Icons.check,
+//                                   color: Colors.white,
+//                                   size: 24,
+//                                 )
+//                                 : null,
+//                       ),
+//                     ),
+//                   );
+//                 },
+//               ),
+//     );
+//   }
+// }
+
+// // Animated Icon Button for app bar icons
+// class _AnimatedIconButton extends StatefulWidget {
+//   final IconData icon;
+//   final Color color;
+//   final Color hoverColor;
+//   final VoidCallback onPressed;
+//   final String tooltip;
+
+//   const _AnimatedIconButton({
+//     required this.icon,
+//     required this.color,
+//     required this.hoverColor,
+//     required this.onPressed,
+//     required this.tooltip,
+//   });
+
+//   @override
+//   State<_AnimatedIconButton> createState() => _AnimatedIconButtonState();
+// }
+
+// class _AnimatedIconButtonState extends State<_AnimatedIconButton> {
+//   bool _isHovering = false;
+
+//   @override
+//   Widget build(BuildContext context) {
+//     // Only use hover effect on desktop/web platforms
+//     final bool isMobile = MediaQuery.of(context).size.width < 600;
+
+//     return MouseRegion(
+//       onEnter: (_) => isMobile ? null : setState(() => _isHovering = true),
+//       onExit: (_) => isMobile ? null : setState(() => _isHovering = false),
+//       cursor: SystemMouseCursors.click,
+//       child: Tooltip(
+//         message: widget.tooltip,
+//         child: IconButton(
+//           icon: TweenAnimationBuilder<double>(
+//             tween: Tween<double>(begin: 0, end: _isHovering ? 1.0 : 0.0),
+//             duration: const Duration(milliseconds: 200),
+//             curve: Curves.easeOutBack,
+//             builder: (context, value, child) {
+//               return Transform.scale(
+//                 scale: 1.0 + (value * 0.2),
+//                 child: AnimatedContainer(
+//                   duration: const Duration(milliseconds: 200),
+//                   decoration: BoxDecoration(
+//                     color:
+//                         _isHovering
+//                             ? widget.hoverColor.withOpacity(0.1)
+//                             : Colors.transparent,
+//                     shape: BoxShape.circle,
+//                   ),
+//                   padding: const EdgeInsets.all(4),
+//                   child: Icon(
+//                     widget.icon,
+//                     color: Color.lerp(widget.color, widget.hoverColor, value),
+//                     size: 24,
+//                   ),
+//                 ),
+//               );
+//             },
+//           ),
+//           onPressed: widget.onPressed,
+//           splashRadius: 24,
+//         ),
+//       ),
+//     );
+//   }
+// }
+
+// // Animated Text Button for app bar actions
+// class _AnimatedTextButton extends StatefulWidget {
+//   final String text;
+//   final VoidCallback onPressed;
+//   final Color color;
+
+//   const _AnimatedTextButton({
+//     required this.text,
+//     required this.onPressed,
+//     required this.color,
+//   });
+
+//   @override
+//   State<_AnimatedTextButton> createState() => _AnimatedTextButtonState();
+// }
+
+// class _AnimatedTextButtonState extends State<_AnimatedTextButton> {
+//   bool _isHovering = false;
+
+//   @override
+//   Widget build(BuildContext context) {
+//     // Only use hover effect on desktop/web platforms
+//     final bool isMobile = MediaQuery.of(context).size.width < 600;
+
+//     return MouseRegion(
+//       onEnter: (_) => isMobile ? null : setState(() => _isHovering = true),
+//       onExit: (_) => isMobile ? null : setState(() => _isHovering = false),
+//       cursor: SystemMouseCursors.click,
+//       child: TweenAnimationBuilder<double>(
+//         tween: Tween<double>(begin: 0, end: _isHovering ? 1.0 : 0.0),
+//         duration: const Duration(milliseconds: 200),
+//         curve: Curves.easeOutBack,
+//         builder: (context, value, child) {
+//           return TextButton(
+//             onPressed: widget.onPressed,
+//             style: TextButton.styleFrom(
+//               foregroundColor: widget.color,
+//               backgroundColor: widget.color.withOpacity(value * 0.1),
+//               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+//               shape: RoundedRectangleBorder(
+//                 borderRadius: BorderRadius.circular(8),
+//               ),
+//             ),
+//             child: Transform.scale(
+//               scale: 1.0 + (value * 0.05),
+//               child: Text(
+//                 widget.text,
+//                 style: TextStyle(
+//                   fontWeight: FontWeight.w600,
+//                   letterSpacing: 0.5,
+//                   color: widget.color,
+//                 ),
+//               ),
+//             ),
+//           );
+//         },
+//       ),
+//     );
+//   }
+// }

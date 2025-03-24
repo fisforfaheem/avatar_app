@@ -10,6 +10,7 @@ import '../models/avatar.dart';
 import '../widgets/reorderable_voice_grid.dart';
 import 'add_avatar_screen.dart';
 import 'settings_screen.dart';
+import 'dart:io';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -23,6 +24,23 @@ class _HomeScreenState extends State<HomeScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   String? _currentlyPlayingVoiceId;
   StreamSubscription? _playerStateSubscription;
+
+  // Track which avatars are collapsed
+  final Set<String> _collapsedAvatars = {};
+
+  // Toggle avatar collapsed state
+  void _toggleAvatarCollapsed(String avatarId) {
+    setState(() {
+      if (_collapsedAvatars.contains(avatarId)) {
+        _collapsedAvatars.remove(avatarId);
+      } else {
+        _collapsedAvatars.add(avatarId);
+      }
+    });
+
+    // Add haptic feedback for collapse/expand
+    HapticFeedback.selectionClick();
+  }
 
   @override
   void initState() {
@@ -69,6 +87,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
+    final isTablet = screenWidth >= 600 && screenWidth < 1024;
+    final isDesktop = screenWidth >= 1024;
 
     return Consumer2<AvatarProvider, ThemeProvider>(
       builder: (context, avatarProvider, themeProvider, child) {
@@ -162,11 +182,20 @@ class _HomeScreenState extends State<HomeScreen> {
                               height: 40,
                               child: Row(
                                 children: [
-                                  Icon(
-                                    avatar.icon,
-                                    size: 16,
-                                    color: avatarColor,
-                                  ),
+                                  avatar.imagePath != null
+                                      ? ClipOval(
+                                        child: Image.file(
+                                          File(avatar.imagePath!),
+                                          width: 16,
+                                          height: 16,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      )
+                                      : Icon(
+                                        avatar.icon,
+                                        size: 16,
+                                        color: avatarColor,
+                                      ),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
@@ -217,11 +246,21 @@ class _HomeScreenState extends State<HomeScreen> {
                                 children: [
                                   _CustomBadge(
                                     label: '${voice.playCount}',
-                                    child: Icon(
-                                      avatar.icon,
-                                      size: 16,
-                                      color: avatarColor,
-                                    ),
+                                    child:
+                                        avatar.imagePath != null
+                                            ? ClipOval(
+                                              child: Image.file(
+                                                File(avatar.imagePath!),
+                                                width: 16,
+                                                height: 16,
+                                                fit: BoxFit.cover,
+                                              ),
+                                            )
+                                            : Icon(
+                                              avatar.icon,
+                                              size: 16,
+                                              color: avatarColor,
+                                            ),
                                   ),
                                   const SizedBox(width: 8),
                                   Expanded(
@@ -533,252 +572,295 @@ class _HomeScreenState extends State<HomeScreen> {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
+    final isTablet = screenWidth >= 600 && screenWidth < 1024;
+    final isDesktop = screenWidth >= 1024;
+    final bool isCollapsed = _collapsedAvatars.contains(avatar.id);
+
+    // Calculate sizes (only 20% smaller than original)
+    final double verticalPadding = isMobile ? 8 : (isTablet ? 10 : 12);
+    final double horizontalPadding = isMobile ? 12 : (isTablet ? 16 : 20);
+    final double iconSize = isMobile ? 18 : (isTablet ? 22 : 26);
+    final double fontSize = isMobile ? 14 : (isTablet ? 16 : 18);
+    final double subFontSize = isMobile ? 11 : 13;
 
     return Container(
       margin: EdgeInsets.only(bottom: isMobile ? 12 : 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Avatar card with hover effect
-          _HoverAnimatedContainer(
-            builder:
-                (context, isHovering) => Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isMobile ? 12 : 16,
-                    vertical: isMobile ? 10 : 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color:
-                        isDarkMode
-                            ? Theme.of(context).colorScheme.surface
-                            : avatarColor.withOpacity(isHovering ? 0.12 : 0.08),
-                    border: Border.all(
-                      color:
-                          isDarkMode
-                              ? isHovering
-                                  ? Theme.of(
-                                    context,
-                                  ).colorScheme.primary.withOpacity(0.5)
-                                  : Theme.of(context).colorScheme.outline
-                              : avatarColor.withOpacity(isHovering ? 0.4 : 0.2),
-                      width: isHovering ? 2.0 : 1.5,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color:
-                            isDarkMode
-                                ? Colors.black.withOpacity(
-                                  isHovering ? 0.3 : 0.2,
-                                )
-                                : avatarColor.withOpacity(
-                                  isHovering ? 0.15 : 0.08,
-                                ),
-                        blurRadius: isHovering ? 12 : 8,
-                        offset: Offset(0, isHovering ? 4 : 3),
-                        spreadRadius: isHovering ? 1 : 0,
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      // Avatar icon with animation
-                      TweenAnimationBuilder<double>(
-                        tween: Tween<double>(
-                          begin: 0,
-                          end: isHovering ? 1.0 : 0.0,
+          // Modern avatar header with hover effect but no elevation
+          Center(
+            child: SizedBox(
+              width: screenWidth * (isMobile ? 0.98 : (isTablet ? 0.9 : 0.85)),
+              child: StatefulBuilder(
+                builder: (context, setState) {
+                  bool isHovering = false;
+
+                  return MouseRegion(
+                    onEnter: (_) => setState(() => isHovering = true),
+                    onExit: (_) => setState(() => isHovering = false),
+                    cursor: SystemMouseCursors.click,
+                    child: GestureDetector(
+                      onTap: () => _toggleAvatarCollapsed(avatar.id),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: horizontalPadding,
+                          vertical: verticalPadding,
                         ),
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeOutBack,
-                        builder: (context, value, child) {
-                          return Transform.rotate(
-                            angle: value * 0.05,
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
+                        decoration: BoxDecoration(
+                          color:
+                              isDarkMode
+                                  ? Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest
+                                      .withOpacity(isHovering ? 0.8 : 0.6)
+                                  : avatarColor.withOpacity(
+                                    isHovering ? 0.12 : 0.08,
+                                  ),
+                          border: Border.all(
+                            color:
+                                isDarkMode
+                                    ? isHovering
+                                        ? Theme.of(
+                                          context,
+                                        ).colorScheme.primary.withOpacity(0.5)
+                                        : Theme.of(context).colorScheme.outline
+                                    : avatarColor.withOpacity(
+                                      isHovering ? 0.4 : 0.2,
+                                    ),
+                            width: isHovering ? 1.5 : 1.0,
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          children: [
+                            // Avatar icon with subtle animation
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 250),
+                              curve: Curves.easeOutCubic,
                               padding: EdgeInsets.all(isMobile ? 8 : 10),
                               decoration: BoxDecoration(
                                 color: avatarColor.withOpacity(
                                   isDarkMode
                                       ? (isHovering ? 0.3 : 0.2)
-                                      : (isHovering ? 0.25 : 0.15),
+                                      : (isHovering ? 0.2 : 0.15),
                                 ),
                                 shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: avatarColor.withOpacity(
-                                      isHovering ? 0.2 : 0.1,
-                                    ),
-                                    blurRadius: isHovering ? 6 : 4,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
                               ),
-                              child: Icon(
-                                avatar.icon,
-                                size: isMobile ? 20 : 24,
-                                color: avatarColor,
-                              ),
+                              child:
+                                  avatar.imagePath != null
+                                      ? ClipOval(
+                                        child: Image.file(
+                                          File(avatar.imagePath!),
+                                          fit: BoxFit.cover,
+                                          width: iconSize,
+                                          height: iconSize,
+                                        ),
+                                      )
+                                      : Icon(
+                                        avatar.icon,
+                                        size: iconSize,
+                                        color: avatarColor,
+                                      ),
                             ),
-                          );
-                        },
-                      ),
-                      SizedBox(width: isMobile ? 8 : 12),
+                            SizedBox(width: isMobile ? 12 : 16),
 
-                      // Avatar name and voice count
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            AnimatedDefaultTextStyle(
-                              duration: const Duration(milliseconds: 200),
-                              style: TextStyle(
-                                fontSize: isMobile ? 14 : 16,
-                                fontWeight:
-                                    isHovering
-                                        ? FontWeight.w800
-                                        : FontWeight.w700,
-                                letterSpacing: 0.5,
-                                color: Theme.of(context).colorScheme.onSurface,
-                              ),
-                              child: Text(avatar.name.toUpperCase()),
+                            // Avatar name and voice count
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                AnimatedDefaultTextStyle(
+                                  duration: const Duration(milliseconds: 200),
+                                  style: TextStyle(
+                                    fontSize: fontSize,
+                                    fontWeight:
+                                        isHovering
+                                            ? FontWeight.w700
+                                            : FontWeight.w600,
+                                    letterSpacing: 0.5,
+                                    color:
+                                        Theme.of(context).colorScheme.onSurface,
+                                  ),
+                                  child: Text(avatar.name.toUpperCase()),
+                                ),
+                                SizedBox(height: 2),
+                                AnimatedDefaultTextStyle(
+                                  duration: const Duration(milliseconds: 200),
+                                  style: TextStyle(
+                                    fontSize: subFontSize,
+                                    fontWeight:
+                                        isHovering
+                                            ? FontWeight.w500
+                                            : FontWeight.w400,
+                                    color:
+                                        Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                  ),
+                                  child: Text('${avatar.voices.length} voices'),
+                                ),
+                              ],
                             ),
-                            SizedBox(height: isMobile ? 1 : 2),
-                            AnimatedDefaultTextStyle(
-                              duration: const Duration(milliseconds: 200),
-                              style: TextStyle(
-                                fontSize: isMobile ? 11 : 12,
-                                fontWeight:
-                                    isHovering
-                                        ? FontWeight.w600
-                                        : FontWeight.w500,
-                                color: Theme.of(context).colorScheme.onSurface
-                                    .withOpacity(isHovering ? 0.8 : 0.7),
+
+                            Spacer(),
+
+                            // Collapse indicator with rotation animation
+                            AnimatedRotation(
+                              turns: isCollapsed ? -0.25 : 0.25, // -90° or 90°
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeOutCubic,
+                              child: Container(
+                                padding: EdgeInsets.all(4),
+                                child: Icon(
+                                  Icons.chevron_right,
+                                  size: iconSize - 4,
+                                  color:
+                                      isHovering
+                                          ? avatarColor
+                                          : Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withOpacity(0.5),
+                                ),
                               ),
-                              child: Text('${avatar.voices.length} voices'),
+                            ),
+
+                            SizedBox(width: isMobile ? 8 : 10),
+
+                            // Add voice button with modern styling
+                            Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(8),
+                                onTap:
+                                    () => Navigator.pushNamed(
+                                      context,
+                                      '/avatar/${avatar.id}',
+                                    ),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: isMobile ? 8 : 14,
+                                    vertical: isMobile ? 6 : 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: avatarColor.withOpacity(
+                                      isDarkMode ? 0.15 : 0.12,
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.add,
+                                        size: iconSize - 4,
+                                        color: avatarColor,
+                                      ),
+                                      if (!isMobile) ...[
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          'ADD VOICE',
+                                          style: TextStyle(
+                                            fontSize: subFontSize,
+                                            fontWeight: FontWeight.w600,
+                                            color: avatarColor,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            SizedBox(width: isMobile ? 4 : 8),
+
+                            // Edit avatar button with modern styling
+                            Material(
+                              color: Colors.transparent,
+                              borderRadius: BorderRadius.circular(20),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(20),
+                                onTap:
+                                    () => Navigator.pushNamed(
+                                      context,
+                                      '/edit-avatar/${avatar.id}',
+                                    ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: Icon(
+                                    Icons.edit_outlined,
+                                    size: iconSize - 2,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurface.withOpacity(0.5),
+                                  ),
+                                ),
+                              ),
                             ),
                           ],
                         ),
                       ),
-
-                      // Add voice button - hide text on mobile
-                      _HoverButton(
-                        onPressed: () {
-                          Navigator.pushNamed(context, '/avatar/${avatar.id}');
-                        },
-                        builder:
-                            (context, isButtonHovering) => Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: isMobile ? 8 : 12,
-                                vertical: isMobile ? 6 : 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: avatarColor.withOpacity(
-                                  isDarkMode
-                                      ? (isButtonHovering ? 0.25 : 0.15)
-                                      : (isButtonHovering ? 0.2 : 0.12),
-                                ),
-                                borderRadius: BorderRadius.circular(8),
-                                boxShadow:
-                                    isButtonHovering
-                                        ? [
-                                          BoxShadow(
-                                            color: avatarColor.withOpacity(0.2),
-                                            blurRadius: 4,
-                                            offset: const Offset(0, 2),
-                                          ),
-                                        ]
-                                        : null,
-                              ),
-                              child: Row(
-                                children: [
-                                  TweenAnimationBuilder<double>(
-                                    tween: Tween<double>(
-                                      begin: 0,
-                                      end: isButtonHovering ? 1.0 : 0.0,
-                                    ),
-                                    duration: const Duration(milliseconds: 300),
-                                    curve: Curves.easeOutBack,
-                                    builder: (context, value, child) {
-                                      return Transform.scale(
-                                        scale: 1.0 + (value * 0.2),
-                                        child: Icon(
-                                          Icons.add,
-                                          size: isMobile ? 14 : 16,
-                                          color: avatarColor,
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                  if (!isMobile) ...[
-                                    const SizedBox(width: 4),
-                                    AnimatedDefaultTextStyle(
-                                      duration: const Duration(
-                                        milliseconds: 200,
-                                      ),
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight:
-                                            isButtonHovering
-                                                ? FontWeight.w700
-                                                : FontWeight.w600,
-                                        letterSpacing: 0.5,
-                                        color: avatarColor,
-                                      ),
-                                      child: const Text('ADD VOICE'),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                      ),
-
-                      // Edit avatar button
-                      _HoverIconButton(
-                        icon: Icons.edit_outlined,
-                        size: isMobile ? 18 : 20,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withOpacity(0.6),
-                        hoverColor: Theme.of(context).colorScheme.primary,
-                        tooltip: 'Edit Avatar',
-                        onPressed: () {
-                          Navigator.pushNamed(
-                            context,
-                            '/edit-avatar/${avatar.id}',
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-          ),
-
-          // Voice list or empty message
-          if (avatar.voices.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 8, left: 8),
-              child: Text(
-                'No voices yet. Add one with the button above.',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withOpacity(0.6),
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: ReorderableVoiceGrid(
-                voices: avatar.voices,
-                avatarId: avatar.id,
-                avatarColor: avatarColor,
-                onVoiceTap: _playOrPauseVoice,
-                currentlyPlayingVoiceId: _currentlyPlayingVoiceId,
+                    ),
+                  );
+                },
               ),
             ),
+          ),
+
+          // Voice list or empty message with animated expanding/collapsing
+          AnimatedCrossFade(
+            firstChild:
+                avatar.voices.isEmpty
+                    ? Padding(
+                      padding: const EdgeInsets.only(top: 12, bottom: 4),
+                      child: Center(
+                        child: Text(
+                          'No voices yet. Add one with the button above.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withOpacity(0.6),
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                    )
+                    : Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Center(
+                        child: SizedBox(
+                          width:
+                              screenWidth *
+                              (isMobile ? 0.98 : (isTablet ? 0.9 : 0.85)),
+                          child: AnimationLimiter(
+                            child: ReorderableVoiceGrid(
+                              voices: avatar.voices,
+                              avatarId: avatar.id,
+                              avatarColor: avatarColor,
+                              onVoiceTap: _playOrPauseVoice,
+                              currentlyPlayingVoiceId: _currentlyPlayingVoiceId,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+            secondChild: const SizedBox.shrink(),
+            crossFadeState:
+                isCollapsed
+                    ? CrossFadeState.showSecond
+                    : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 400),
+            reverseDuration: const Duration(milliseconds: 300),
+            sizeCurve: Curves.easeOutCubic,
+            firstCurve: Curves.easeOutCubic,
+            secondCurve: Curves.easeInCubic,
+          ),
         ],
       ),
     );
@@ -961,10 +1043,11 @@ class _HomeScreenState extends State<HomeScreen> {
         context,
         listen: false,
       );
-      avatarProvider.addAvatar(
+      await avatarProvider.addAvatar(
         result['name'],
         icon: result['icon'],
         color: result['color'],
+        imagePath: result['imagePath'],
       );
 
       ScaffoldMessenger.of(context).showSnackBar(

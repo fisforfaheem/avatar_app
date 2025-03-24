@@ -306,6 +306,7 @@ class StorageService {
       'color': avatar.color,
       'icon': _iconDataToString(avatar.icon),
       'voices': avatar.voices.map((voice) => _voiceToJson(voice)).toList(),
+      'imagePath': avatar.imagePath,
     };
   }
 
@@ -320,6 +321,7 @@ class StorageService {
           (json['voices'] as List)
               .map<Voice>((voiceJson) => _voiceFromJson(voiceJson))
               .toList(),
+      imagePath: json['imagePath'],
     );
   }
 

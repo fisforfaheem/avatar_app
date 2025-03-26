@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import '../providers/avatar_provider.dart';
 import '../providers/theme_provider.dart';
+import '../providers/audio_routing_provider.dart';
+import '../widgets/audio_routing_status.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -51,22 +55,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 horizontal: isMobile ? 16.0 : 24.0,
                 vertical: 16.0,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Theme settings section
-                  _buildSectionHeader(context, 'Appearance'),
-                  _buildThemeSelector(context),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Theme settings section
+                    _buildSectionHeader(context, 'Appearance'),
+                    _buildThemeSelector(context),
 
-                  const SizedBox(height: 32),
+                    const SizedBox(height: 32),
 
-                  // Data management section
-                  _buildSectionHeader(context, 'Data Management'),
-                  const SizedBox(height: 8),
+                    // Audio settings section - only show on Windows
+                    if (!kIsWeb && Platform.isWindows) ...[
+                      _buildSectionHeader(context, 'Call Center Integration'),
+                      _buildAudioRoutingOptions(context),
+                      const SizedBox(height: 32),
+                    ],
 
-                  // Clear all data option
-                  _buildClearDataOption(context),
-                ],
+                    // Data management section
+                    _buildSectionHeader(context, 'Data Management'),
+                    const SizedBox(height: 8),
+
+                    // Clear all data option
+                    _buildClearDataOption(context),
+                  ],
+                ),
               ),
             ),
           ),
@@ -177,6 +190,222 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     : 'Light mode is enabled',
                 style: TextStyle(
                   fontSize: 14,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Build audio routing options
+  Widget _buildAudioRoutingOptions(BuildContext context) {
+    final audioRoutingProvider = Provider.of<AudioRoutingProvider>(context);
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
+    return Card(
+      elevation: isDarkMode ? 2 : 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: isDarkMode ? theme.colorScheme.outline : Colors.grey.shade200,
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Card header with test button
+            Row(
+              children: [
+                Icon(Icons.call, color: theme.colorScheme.primary),
+                const SizedBox(width: 12),
+                Text(
+                  'Call Center Audio Routing',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+                const Spacer(),
+                if (audioRoutingProvider.hasCheckedRouting)
+                  Icon(
+                    audioRoutingProvider.isAudioRoutingDetected
+                        ? Icons.check_circle
+                        : Icons.warning_amber_rounded,
+                    color:
+                        audioRoutingProvider.isAudioRoutingDetected
+                            ? Colors.green
+                            : theme.colorScheme.error,
+                    size: 24,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Status message based on detection results
+            if (audioRoutingProvider.hasCheckedRouting) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color:
+                      audioRoutingProvider.isAudioRoutingDetected
+                          ? Colors.green.withOpacity(0.1)
+                          : theme.colorScheme.errorContainer.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      audioRoutingProvider.isAudioRoutingDetected
+                          ? Icons.check_circle
+                          : Icons.warning_amber_rounded,
+                      color:
+                          audioRoutingProvider.isAudioRoutingDetected
+                              ? Colors.green
+                              : theme.colorScheme.error,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            audioRoutingProvider.isAudioRoutingDetected
+                                ? 'Audio Routing Properly Configured'
+                                : 'Audio Routing Issues Detected',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color:
+                                  audioRoutingProvider.isAudioRoutingDetected
+                                      ? Colors.green
+                                      : theme.colorScheme.error,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            audioRoutingProvider.isAudioRoutingDetected
+                                ? 'Your voice avatars will be heard during calls'
+                                : 'Your voice avatars may not be heard during calls',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // Current output device
+            if (audioRoutingProvider.lastDetectedOutputDevice != null) ...[
+              Text(
+                'Current Audio Device:',
+                style: TextStyle(
+                  fontWeight: FontWeight.w500,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                audioRoutingProvider.lastDetectedOutputDevice!,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // Test button
+            Center(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.speaker_phone),
+                label: Text(
+                  audioRoutingProvider.isTestInProgress
+                      ? 'Testing...'
+                      : 'Test Audio Routing',
+                ),
+                onPressed:
+                    audioRoutingProvider.isTestInProgress
+                        ? null
+                        : () async {
+                          final result =
+                              await audioRoutingProvider.testAudioRouting();
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  result
+                                      ? 'Audio routing properly configured for calls!'
+                                      : 'Audio routing issue detected. Check instructions below.',
+                                ),
+                                behavior: SnackBarBehavior.floating,
+                                backgroundColor:
+                                    result
+                                        ? Colors.green
+                                        : theme.colorScheme.error,
+                              ),
+                            );
+                          }
+                        },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: theme.colorScheme.primaryContainer,
+                  foregroundColor: theme.colorScheme.onPrimaryContainer,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Setup instructions if there are issues
+            if (audioRoutingProvider.hasCheckedRouting &&
+                !audioRoutingProvider.isAudioRoutingDetected)
+              const AudioRoutingStatus(),
+
+            // Notification settings
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Icon(
+                  Icons.notifications,
+                  color: theme.colorScheme.primary,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Show Notification Bell',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+                const Spacer(),
+                Switch(
+                  value: audioRoutingProvider.showRoutingHints,
+                  onChanged: (value) {
+                    audioRoutingProvider.toggleRoutingHints(value);
+                  },
+                  activeColor: theme.colorScheme.primary,
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 32.0),
+              child: Text(
+                'When enabled, a notification bell will appear in the app bar if audio routing issues are detected',
+                style: TextStyle(
+                  fontSize: 12,
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),

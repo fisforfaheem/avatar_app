@@ -1,0 +1,18 @@
+# App Icon Replacement Instructions
+
+The current app_icon.ico file is the default Flutter icon. To replace it with your custom Voice Avatar Hub icon:
+
+1. Create an ICO file with the following dimensions:
+   - 16x16
+   - 32x32
+   - 48x48
+   - 256x256
+
+2. Name it "app_icon.ico" and replace the existing file in this directory.
+
+3. Rebuild the app to apply the changes.
+
+Notes:
+- You can use online ICO converters or tools like IconWorkshop to create ICO files from PNG images
+- Make sure your ICO file includes all required resolutions for proper display at different sizes
+- The MSIX package configured in pubspec.yaml expects the PNG icon at assets/app_icons/app_icon_256.png 

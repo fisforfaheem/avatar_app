@@ -1,0 +1,25 @@
+Please replace this file with a proper app icon in PNG format at sizes:
+- 16x16
+- 32x32
+- 48x48
+- 256x256
+
+Recommended file name format: app_icon_256.png, app_icon_48.png, etc.
+
+For a proper app icon, you'll need to create icons in various sizes using an image editor.
+Once you have real icons, delete this placeholder file.
+
+A simple SVG icon has been created for the app: app_icon.svg
+
+To convert this SVG to ICO format for Windows:
+1. Use an online converter like https://convertico.com/ or https://svgtopng.com/ followed by https://icoconvert.com/
+2. Create icon sizes: 16x16, 32x32, 48x48, and 256x256 pixels
+3. Replace the default app_icon.ico in windows/runner/resources/
+
+For MSIX packaging:
+1. Convert the SVG to PNG format (256x256) 
+2. Save as assets/app_icons/app_icon_256.png
+3. The MSIX package will use this icon as specified in pubspec.yaml
+
+This SVG uses a simple blue-to-purple gradient with a voice/audio icon, suitable as a placeholder
+for the Voice Avatar Hub application. Replace with professional designs when available. 

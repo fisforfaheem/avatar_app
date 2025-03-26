@@ -4,10 +4,13 @@ import 'package:provider/provider.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../providers/avatar_provider.dart';
 import '../providers/theme_provider.dart';
+import '../providers/audio_routing_provider.dart';
 import '../models/avatar.dart';
 import '../widgets/reorderable_voice_grid.dart';
+import '../widgets/audio_routing_status.dart';
 import 'add_avatar_screen.dart';
 import 'settings_screen.dart';
 import 'dart:io';
@@ -19,7 +22,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
   // Audio player instance
   final AudioPlayer _audioPlayer = AudioPlayer();
   String? _currentlyPlayingVoiceId;
@@ -27,6 +31,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Track which avatars are collapsed
   final Set<String> _collapsedAvatars = {};
+
+  // Animation controller for app entrance animations
+  late AnimationController _appEntranceController;
 
   // Toggle avatar collapsed state
   void _toggleAvatarCollapsed(String avatarId) {
@@ -45,6 +52,17 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+
+    // Initialize app entrance animation controller
+    _appEntranceController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    );
+
+    // Start animations when widget is built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _appEntranceController.forward();
+    });
 
     // Set up player state listener with error handling
     _setupPlayerStateListener();
@@ -74,6 +92,9 @@ class _HomeScreenState extends State<HomeScreen> {
     // Cancel subscription first
     _playerStateSubscription?.cancel();
 
+    // Dispose animation controller
+    _appEntranceController.dispose();
+
     // Use try-catch to handle any errors during disposal
     try {
       _audioPlayer.dispose();
@@ -90,431 +111,275 @@ class _HomeScreenState extends State<HomeScreen> {
     final isTablet = screenWidth >= 600 && screenWidth < 1024;
     final isDesktop = screenWidth >= 1024;
 
-    return Consumer2<AvatarProvider, ThemeProvider>(
-      builder: (context, avatarProvider, themeProvider, child) {
+    return Consumer3<AvatarProvider, ThemeProvider, AudioRoutingProvider>(
+      builder: (
+        context,
+        avatarProvider,
+        themeProvider,
+        audioRoutingProvider,
+        child,
+      ) {
         final recentVoices = avatarProvider.getRecentlyUsedVoices(limit: 3);
         final popularVoices = avatarProvider.getMostUsedVoices(limit: 3);
         final isDeletingAvatar = avatarProvider.isDeletingAvatar;
         final theme = Theme.of(context);
         final isDarkMode = theme.brightness == Brightness.dark;
 
+        // Check for audio routing issues (only on Windows)
+        final bool showAudioRoutingAlert =
+            !kIsWeb &&
+            Platform.isWindows &&
+            audioRoutingProvider.hasCheckedRouting &&
+            !audioRoutingProvider.isAudioRoutingDetected;
+
+        // Create app bar actions list
+        final List<Widget> appBarActions = [
+          // Add Avatar button
+          if (!isDeletingAvatar)
+            _AnimatedIconButton(
+              icon: Icons.add_circle_outline,
+              tooltip: 'Add New Avatar (Ctrl+N)',
+              onPressed: () => _showAddAvatarDialog(context),
+              color: theme.colorScheme.onSurface,
+              hoverColor: theme.colorScheme.primary,
+              size: isMobile ? 20 : 22,
+            ),
+          // Search button
+          _AnimatedIconButton(
+            icon: Icons.search,
+            tooltip: 'Search Voices (Ctrl+F)',
+            onPressed:
+                isDeletingAvatar
+                    ? null
+                    : () => _showGlobalSearchDialog(context, avatarProvider),
+            color: theme.colorScheme.onSurface,
+            hoverColor: theme.colorScheme.primary,
+            size: isMobile ? 20 : 22,
+            isDisabled: isDeletingAvatar,
+          ),
+          // Quick access button
+          if (recentVoices.isNotEmpty || popularVoices.isNotEmpty)
+            _AnimatedPopupMenuButton<Map<String, dynamic>>(
+              tooltip: 'Quick Access',
+              icon: Icons.access_time,
+              iconSize: isMobile ? 20 : 22,
+              color: theme.colorScheme.onSurface,
+              hoverColor: theme.colorScheme.primary,
+              enabled: !isDeletingAvatar,
+              itemBuilder: (context) {
+                List<PopupMenuEntry<Map<String, dynamic>>> items = [];
+
+                // Recent voices section
+                if (recentVoices.isNotEmpty) {
+                  items.add(
+                    const PopupMenuItem<Map<String, dynamic>>(
+                      enabled: false,
+                      height: 24,
+                      child: Text(
+                        'RECENTLY USED',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black54,
+                        ),
+                      ),
+                    ),
+                  );
+
+                  for (final item in recentVoices) {
+                    final avatar = item['avatar'] as Avatar;
+                    final voice = item['voice'] as Voice;
+                    final avatarColor = _getColorFromString(avatar.color);
+
+                    items.add(
+                      PopupMenuItem<Map<String, dynamic>>(
+                        value: item,
+                        height: 40,
+                        child: Row(
+                          children: [
+                            avatar.imagePath != null
+                                ? ClipOval(
+                                  child: Image.file(
+                                    File(avatar.imagePath!),
+                                    width: 24,
+                                    height: 24,
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                                : Icon(
+                                  avatar.icon,
+                                  size: 24,
+                                  color: avatarColor,
+                                ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                voice.name,
+                                style: const TextStyle(fontSize: 14),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  // Add divider if we have both recent and popular
+                  if (popularVoices.isNotEmpty) {
+                    items.add(const PopupMenuDivider());
+                  }
+                }
+
+                return items;
+              },
+              onSelected: (item) {
+                final voice = item['voice'] as Voice;
+                _playOrPauseVoice(voice);
+              },
+            ),
+          // Add the audio routing notification bell
+          if (showAudioRoutingAlert)
+            _AnimatedIconButton(
+              icon: Icons.notifications_active,
+              tooltip: 'Audio Routing Issue Detected',
+              onPressed: () => _showAudioRoutingDialog(context),
+              color: theme.colorScheme.error,
+              hoverColor: theme.colorScheme.error,
+              size: isMobile ? 20 : 22,
+              useContainer: true,
+              containerColor: theme.colorScheme.errorContainer.withOpacity(0.2),
+              containerHoverColor: theme.colorScheme.errorContainer.withOpacity(
+                0.3,
+              ),
+            ),
+          // Theme toggle button
+          _AnimatedIconButton(
+            icon:
+                themeProvider.themeMode == ThemeMode.light
+                    ? Icons.dark_mode
+                    : Icons.light_mode,
+            tooltip:
+                themeProvider.themeMode == ThemeMode.light
+                    ? 'Switch to Dark Mode'
+                    : 'Switch to Light Mode',
+            onPressed: themeProvider.toggleTheme,
+            color: theme.colorScheme.onSurface,
+            hoverColor: theme.colorScheme.primary,
+            size: isMobile ? 18 : 20,
+          ),
+          // Settings button
+          _AnimatedIconButton(
+            icon: Icons.settings,
+            tooltip: 'Settings',
+            onPressed:
+                () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SettingsScreen(),
+                  ),
+                ),
+            color: theme.colorScheme.onSurface,
+            hoverColor: theme.colorScheme.primary,
+            size: isMobile ? 18 : 20,
+          ),
+          // Help button for keyboard shortcuts - hide on mobile
+          if (!isMobile)
+            _AnimatedIconButton(
+              icon: Icons.keyboard,
+              tooltip: 'Keyboard Shortcuts',
+              onPressed: () => _showKeyboardShortcutsDialog(context),
+              color: theme.colorScheme.onSurface,
+              hoverColor: theme.colorScheme.primary,
+              size: 20,
+            ),
+          // Stop button - only show when audio is playing
+          if (_currentlyPlayingVoiceId != null)
+            Padding(
+              padding: EdgeInsets.only(right: isMobile ? 8.0 : 12.0),
+              child: _AnimatedIconButton(
+                icon: Icons.stop_rounded,
+                tooltip: 'Stop playback (Esc)',
+                onPressed: _stopAllPlayback,
+                color: Colors.black87,
+                hoverColor: theme.colorScheme.error,
+                size: isMobile ? 18 : 20,
+                useContainer: true,
+                containerColor: Colors.black.withOpacity(0.08),
+                containerHoverColor: theme.colorScheme.errorContainer
+                    .withOpacity(0.2),
+              ),
+            ),
+        ];
+
         return AnimatedTheme(
           data: theme,
           duration: const Duration(milliseconds: 400),
           child: Scaffold(
             backgroundColor: theme.colorScheme.surface,
-            appBar: AppBar(
-              title: Text(
-                'VOICE AVATAR HUB',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5,
-                  fontSize: isMobile ? 16 : 18,
-                  color: theme.colorScheme.onSurface,
-                ),
-              ),
-              centerTitle: true,
-              elevation: 0,
-              backgroundColor: Colors.transparent,
-              foregroundColor: theme.colorScheme.onSurface,
-              actions: [
-                // Add Avatar button
-                if (!isDeletingAvatar)
-                  _AnimatedIconButton(
-                    icon: Icons.add_circle_outline,
-                    tooltip: 'Add New Avatar (Ctrl+N)',
-                    onPressed: () => _showAddAvatarDialog(context),
-                    color: theme.colorScheme.onSurface,
-                    hoverColor: theme.colorScheme.primary,
-                    size: isMobile ? 20 : 22,
-                  ),
-                // Search button
-                _AnimatedIconButton(
-                  icon: Icons.search,
-                  tooltip: 'Search Voices (Ctrl+F)',
-                  onPressed:
-                      isDeletingAvatar
-                          ? null
-                          : () =>
-                              _showGlobalSearchDialog(context, avatarProvider),
-                  color: theme.colorScheme.onSurface,
-                  hoverColor: theme.colorScheme.primary,
-                  size: isMobile ? 20 : 22,
-                  isDisabled: isDeletingAvatar,
-                ),
-                // Quick access button
-                if (recentVoices.isNotEmpty || popularVoices.isNotEmpty)
-                  _AnimatedPopupMenuButton<Map<String, dynamic>>(
-                    tooltip: 'Quick Access',
-                    icon: Icons.access_time,
-                    iconSize: isMobile ? 20 : 22,
-                    color: theme.colorScheme.onSurface,
-                    hoverColor: theme.colorScheme.primary,
-                    enabled: !isDeletingAvatar,
-                    itemBuilder: (context) {
-                      List<PopupMenuEntry<Map<String, dynamic>>> items = [];
-
-                      // Recent voices section
-                      if (recentVoices.isNotEmpty) {
-                        items.add(
-                          const PopupMenuItem<Map<String, dynamic>>(
-                            enabled: false,
-                            height: 24,
-                            child: Text(
-                              'RECENTLY USED',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black54,
-                              ),
-                            ),
-                          ),
-                        );
-
-                        for (final item in recentVoices) {
-                          final avatar = item['avatar'] as Avatar;
-                          final voice = item['voice'] as Voice;
-                          final avatarColor = _getColorFromString(avatar.color);
-
-                          items.add(
-                            PopupMenuItem<Map<String, dynamic>>(
-                              value: item,
-                              height: 40,
-                              child: Row(
-                                children: [
-                                  avatar.imagePath != null
-                                      ? ClipOval(
-                                        child: Image.file(
-                                          File(avatar.imagePath!),
-                                          width: 16,
-                                          height: 16,
-                                          fit: BoxFit.cover,
-                                        ),
-                                      )
-                                      : Icon(
-                                        avatar.icon,
-                                        size: 16,
-                                        color: avatarColor,
-                                      ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      voice.name,
-                                      style: const TextStyle(fontSize: 14),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }
-
-                        // Add divider if we have both recent and popular
-                        if (popularVoices.isNotEmpty) {
-                          items.add(const PopupMenuDivider());
-                        }
-                      }
-
-                      // Popular voices section
-                      if (popularVoices.isNotEmpty) {
-                        items.add(
-                          const PopupMenuItem<Map<String, dynamic>>(
-                            enabled: false,
-                            height: 24,
-                            child: Text(
-                              'MOST USED',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black54,
-                              ),
-                            ),
-                          ),
-                        );
-
-                        for (final item in popularVoices) {
-                          final avatar = item['avatar'] as Avatar;
-                          final voice = item['voice'] as Voice;
-                          final avatarColor = _getColorFromString(avatar.color);
-
-                          items.add(
-                            PopupMenuItem<Map<String, dynamic>>(
-                              value: item,
-                              height: 40,
-                              child: Row(
-                                children: [
-                                  _CustomBadge(
-                                    label: '${voice.playCount}',
-                                    child:
-                                        avatar.imagePath != null
-                                            ? ClipOval(
-                                              child: Image.file(
-                                                File(avatar.imagePath!),
-                                                width: 16,
-                                                height: 16,
-                                                fit: BoxFit.cover,
-                                              ),
-                                            )
-                                            : Icon(
-                                              avatar.icon,
-                                              size: 16,
-                                              color: avatarColor,
-                                            ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      voice.name,
-                                      style: const TextStyle(fontSize: 14),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }
-                      }
-
-                      return items;
-                    },
-                    onSelected: (item) {
-                      final voice = item['voice'] as Voice;
-                      _playOrPauseVoice(voice);
-                    },
-                  ),
-                // Theme toggle button
-                _AnimatedIconButton(
-                  icon:
-                      themeProvider.themeMode == ThemeMode.light
-                          ? Icons.dark_mode
-                          : Icons.light_mode,
-                  tooltip:
-                      themeProvider.themeMode == ThemeMode.light
-                          ? 'Switch to Dark Mode'
-                          : 'Switch to Light Mode',
-                  onPressed: () => _showThemeDialog(context),
-                  color: theme.colorScheme.onSurface,
-                  hoverColor: theme.colorScheme.primary,
-                  size: isMobile ? 18 : 20,
-                  useAnimatedSwitcher: true,
-                  switcherKey: ValueKey<ThemeMode>(themeProvider.themeMode),
-                ),
-                // Settings button
-                _AnimatedIconButton(
-                  icon: Icons.settings,
-                  tooltip: 'Settings',
-                  onPressed:
-                      () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const SettingsScreen(),
-                        ),
-                      ),
-                  color: theme.colorScheme.onSurface,
-                  hoverColor: theme.colorScheme.primary,
-                  size: isMobile ? 18 : 20,
-                ),
-                // Help button for keyboard shortcuts - hide on mobile
-                if (!isMobile)
-                  _AnimatedIconButton(
-                    icon: Icons.keyboard,
-                    tooltip: 'Keyboard Shortcuts',
-                    onPressed: () => _showKeyboardShortcutsDialog(context),
-                    color: theme.colorScheme.onSurface,
-                    hoverColor: theme.colorScheme.primary,
-                    size: 20,
-                  ),
-                // Stop button - only show when audio is playing
-                if (_currentlyPlayingVoiceId != null)
-                  Padding(
-                    padding: EdgeInsets.only(right: isMobile ? 8.0 : 12.0),
-                    child: _AnimatedIconButton(
-                      icon: Icons.stop_rounded,
-                      tooltip: 'Stop playback (Esc)',
-                      onPressed: _stopAllPlayback,
-                      color: Colors.black87,
-                      hoverColor: theme.colorScheme.error,
-                      size: isMobile ? 18 : 20,
-                      useContainer: true,
-                      containerColor: Colors.black.withOpacity(0.08),
-                      containerHoverColor: theme.colorScheme.errorContainer
-                          .withOpacity(0.2),
-                    ),
-                  ),
-              ],
+            appBar: AnimatedAppBar(
+              animation: _appEntranceController,
+              title: 'VOICE AVATAR HUB',
+              isMobile: isMobile,
+              actions: appBarActions,
+              theme: theme,
             ),
             body: AnimatedContainer(
               duration: const Duration(milliseconds: 400),
               curve: Curves.easeOutCubic,
               color: theme.colorScheme.surface,
-              child: Stack(
-                children: [
-                  // Main content
-                  Focus(
-                    autofocus: true,
-                    onKeyEvent: (node, event) {
-                      // Handle keyboard shortcuts
-                      if (event is KeyDownEvent) {
-                        // Escape key to stop playback
-                        if (event.logicalKey == LogicalKeyboardKey.escape) {
-                          _stopAllPlayback();
-                          return KeyEventResult.handled;
-                        }
-
-                        // Ctrl+F to open search
-                        if (event.logicalKey == LogicalKeyboardKey.keyF &&
-                            (HardwareKeyboard.instance.isControlPressed ||
-                                HardwareKeyboard.instance.isMetaPressed)) {
-                          _showGlobalSearchDialog(context, avatarProvider);
-                          return KeyEventResult.handled;
-                        }
-
-                        // Ctrl+N to create new avatar
-                        if (event.logicalKey == LogicalKeyboardKey.keyN &&
-                            (HardwareKeyboard.instance.isControlPressed ||
-                                HardwareKeyboard.instance.isMetaPressed)) {
-                          _showAddAvatarDialog(context);
-                          return KeyEventResult.handled;
-                        }
-
-                        // Space to play/pause selected voice
-                        if (event.logicalKey == LogicalKeyboardKey.space) {
-                          // If there's a currently selected avatar, play/pause its first voice
-                          if (avatarProvider.selectedAvatar != null &&
-                              avatarProvider
-                                  .selectedAvatar!
-                                  .voices
-                                  .isNotEmpty) {
-                            _playOrPauseVoice(
-                              avatarProvider.selectedAvatar!.voices.first,
-                            );
-                            return KeyEventResult.handled;
-                          }
-                          return KeyEventResult.ignored;
-                        }
-
-                        // Arrow keys for navigation
-                        if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
-                            event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                          // Navigate between voices in the selected avatar
-                          if (avatarProvider.selectedAvatar != null) {
-                            // Implementation would depend on your UI structure
-                            // This is a placeholder for the navigation logic
-                            HapticFeedback.lightImpact();
-                            return KeyEventResult.handled;
-                          }
-                          return KeyEventResult.ignored;
-                        }
-
-                        if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
-                            event.logicalKey == LogicalKeyboardKey.arrowRight) {
-                          // Navigate between avatars
-                          final avatars = avatarProvider.avatars;
-                          if (avatars.isNotEmpty) {
-                            int currentIndex = -1;
-                            if (avatarProvider.selectedAvatar != null) {
-                              currentIndex = avatars.indexWhere(
-                                (a) =>
-                                    a.id == avatarProvider.selectedAvatar!.id,
-                              );
-                            }
-
-                            int newIndex;
-                            if (event.logicalKey ==
-                                LogicalKeyboardKey.arrowLeft) {
-                              // Move to previous avatar
-                              newIndex =
-                                  currentIndex > 0
-                                      ? currentIndex - 1
-                                      : avatars.length - 1;
-                            } else {
-                              // Move to next avatar
-                              newIndex = (currentIndex + 1) % avatars.length;
-                            }
-
-                            avatarProvider.setSelectedAvatar(
-                              avatars[newIndex].id,
-                            );
-                            HapticFeedback.lightImpact();
-                            return KeyEventResult.handled;
-                          }
-                          return KeyEventResult.ignored;
-                        }
-                      }
-                      return KeyEventResult.ignored;
-                    },
-                    child: SafeArea(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: isMobile ? 12.0 : 16.0,
-                        ),
-                        child:
-                            avatarProvider.isLoading
-                                ? _buildLoadingState()
-                                : avatarProvider.errorMessage != null
-                                ? _buildErrorState(avatarProvider.errorMessage!)
-                                : avatarProvider.avatars.isEmpty
-                                ? _buildEmptyState()
-                                : _buildAllAvatarsView(
-                                  context,
-                                  avatarProvider.avatars,
-                                ),
-                      ),
-                    ),
-                  ),
-
-                  // Deletion overlay with animation
-                  if (isDeletingAvatar)
-                    AnimatedOpacity(
-                      opacity: isDeletingAvatar ? 1.0 : 0.0,
-                      duration: const Duration(milliseconds: 400),
-                      curve: Curves.easeOut,
-                      child: Container(
-                        color: theme.colorScheme.surface.withOpacity(0.7),
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: AnimationConfiguration.toStaggeredList(
-                              duration: const Duration(milliseconds: 400),
-                              childAnimationBuilder:
-                                  (widget) => SlideAnimation(
-                                    verticalOffset: 30.0,
-                                    child: FadeInAnimation(child: widget),
-                                  ),
-                              children: [
-                                CircularProgressIndicator(
-                                  color: theme.colorScheme.primary,
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'Deleting avatar...',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w300,
-                                    color: theme.colorScheme.onSurface,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Please wait, this may take a moment.',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: theme.colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
+              child: SafeArea(
+                child: _buildMainContent(
+                  context,
+                  avatarProvider,
+                  theme,
+                  isDarkMode,
+                  isMobile,
+                ),
               ),
             ),
           ),
         );
       },
+    );
+  }
+
+  // Show audio routing dialog when notification bell is clicked
+  void _showAudioRoutingDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                const SizedBox(width: 8),
+                const Text('Audio Routing Issue'),
+              ],
+            ),
+            content: const SingleChildScrollView(child: AudioRoutingStatus()),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Close'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SettingsScreen(),
+                    ),
+                  );
+                },
+                child: const Text('Open Settings'),
+              ),
+            ],
+          ),
     );
   }
 
@@ -577,14 +442,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final bool isCollapsed = _collapsedAvatars.contains(avatar.id);
 
     // Calculate sizes (only 20% smaller than original)
-    final double verticalPadding = isMobile ? 8 : (isTablet ? 10 : 12);
-    final double horizontalPadding = isMobile ? 12 : (isTablet ? 16 : 20);
-    final double iconSize = isMobile ? 18 : (isTablet ? 22 : 26);
+    final double verticalPadding = isMobile ? 6 : (isTablet ? 8 : 10);
+    final double horizontalPadding = isMobile ? 10 : (isTablet ? 12 : 16);
+    final double iconSize = isMobile ? 32 : (isTablet ? 38 : 46);
     final double fontSize = isMobile ? 14 : (isTablet ? 16 : 18);
     final double subFontSize = isMobile ? 11 : 13;
 
     return Container(
-      margin: EdgeInsets.only(bottom: isMobile ? 12 : 16),
+      margin: EdgeInsets.only(bottom: isMobile ? 8 : 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -604,10 +469,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       onTap: () => _toggleAvatarCollapsed(avatar.id),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 250),
-                        padding: EdgeInsets.symmetric(
-                          horizontal: horizontalPadding,
-                          vertical: verticalPadding,
-                        ),
+                        padding: EdgeInsets.all(isMobile ? 6 : 8),
                         decoration: BoxDecoration(
                           color:
                               isDarkMode
@@ -640,7 +502,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             AnimatedContainer(
                               duration: const Duration(milliseconds: 250),
                               curve: Curves.easeOutCubic,
-                              padding: EdgeInsets.all(isMobile ? 8 : 10),
+                              padding: EdgeInsets.all(isMobile ? 6 : 8),
                               decoration: BoxDecoration(
                                 color: avatarColor.withOpacity(
                                   isDarkMode
@@ -665,7 +527,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         color: avatarColor,
                                       ),
                             ),
-                            SizedBox(width: isMobile ? 12 : 16),
+                            SizedBox(width: isMobile ? 8 : 10),
 
                             // Avatar name and voice count
                             Column(
@@ -716,7 +578,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 padding: EdgeInsets.all(4),
                                 child: Icon(
                                   Icons.chevron_right,
-                                  size: iconSize - 4,
+                                  size: isMobile ? 22 : 26,
                                   color:
                                       isHovering
                                           ? avatarColor
@@ -728,7 +590,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
 
-                            SizedBox(width: isMobile ? 8 : 10),
+                            SizedBox(width: isMobile ? 6 : 8),
 
                             // Add voice button with modern styling
                             Material(
@@ -743,8 +605,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                 child: AnimatedContainer(
                                   duration: const Duration(milliseconds: 200),
                                   padding: EdgeInsets.symmetric(
-                                    horizontal: isMobile ? 8 : 14,
-                                    vertical: isMobile ? 6 : 8,
+                                    horizontal: isMobile ? 6 : 10,
+                                    vertical: isMobile ? 4 : 6,
                                   ),
                                   decoration: BoxDecoration(
                                     color: avatarColor.withOpacity(
@@ -757,7 +619,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     children: [
                                       Icon(
                                         Icons.add,
-                                        size: iconSize - 4,
+                                        size: isMobile ? 22 : 26,
                                         color: avatarColor,
                                       ),
                                       if (!isMobile) ...[
@@ -777,7 +639,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
 
-                            SizedBox(width: isMobile ? 4 : 8),
+                            SizedBox(width: isMobile ? 2 : 4),
 
                             // Edit avatar button with modern styling
                             Material(
@@ -794,7 +656,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   padding: const EdgeInsets.all(8.0),
                                   child: Icon(
                                     Icons.edit_outlined,
-                                    size: iconSize - 2,
+                                    size: isMobile ? 22 : 26,
                                     color: Theme.of(
                                       context,
                                     ).colorScheme.onSurface.withOpacity(0.5),
@@ -927,65 +789,74 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Build empty state
   Widget _buildEmptyState() {
-    final Color themeColor = Theme.of(context).colorScheme.primary;
+    final theme = Theme.of(context);
+    final primaryColor = theme.colorScheme.primary;
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth >= 1024;
 
-    return AnimationLimiter(
-      child: Center(
+    return Center(
+      child: AnimationLimiter(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: AnimationConfiguration.toStaggeredList(
-            duration: const Duration(milliseconds: 600),
+            duration: const Duration(milliseconds: 800),
             childAnimationBuilder:
                 (widget) => SlideAnimation(
                   verticalOffset: 50.0,
-                  curve: Curves.easeOutCubic,
-                  child: ScaleAnimation(
-                    scale: 0.8,
-                    curve: Curves.easeOutBack,
-                    child: FadeInAnimation(
-                      curve: Curves.easeOut,
-                      child: widget,
-                    ),
-                  ),
+                  curve: Curves.easeOutQuint,
+                  child: FadeInAnimation(curve: Curves.easeOut, child: widget),
                 ),
             children: [
-              Container(
-                padding: const EdgeInsets.all(28),
-                decoration: BoxDecoration(
-                  color: themeColor.withOpacity(0.12),
-                  border: Border.all(
-                    color: themeColor.withOpacity(0.25),
-                    width: 2,
+              // Animated pulsing avatar icon
+              TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0.95, end: 1.05),
+                duration: const Duration(milliseconds: 2000),
+                curve: Curves.easeInOutSine,
+                builder: (context, value, child) {
+                  return Transform.scale(scale: value, child: child);
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(30),
+                  decoration: BoxDecoration(
+                    color: primaryColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(100),
+                    boxShadow: [
+                      BoxShadow(
+                        color: primaryColor.withOpacity(0.2),
+                        blurRadius: 20,
+                        spreadRadius: 2,
+                      ),
+                    ],
                   ),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: themeColor.withOpacity(0.1),
-                      blurRadius: 15,
-                      offset: const Offset(0, 5),
-                      spreadRadius: 1,
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween<double>(begin: 0, end: 1),
+                    duration: const Duration(milliseconds: 1500),
+                    curve: Curves.elasticOut,
+                    builder: (context, value, child) {
+                      return Transform.scale(scale: value, child: child);
+                    },
+                    child: Icon(
+                      Icons.record_voice_over_rounded,
+                      size: 80,
+                      color: primaryColor,
                     ),
-                  ],
-                ),
-                child: Icon(
-                  Icons.record_voice_over,
-                  size: 72,
-                  color: themeColor,
+                  ),
                 ),
               ),
-              const SizedBox(height: 28),
-              Text(
-                'NO AVATARS YET',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1,
-                  color: Theme.of(context).colorScheme.onSurface,
+              const SizedBox(height: 40),
+              // Text elements with staggered animations
+              AnimatedShimmer(
+                child: Text(
+                  'NO AVATARS YET',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                    color: theme.colorScheme.onSurface,
+                  ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 40),
                 child: Text(
@@ -994,35 +865,46 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withOpacity(0.7),
+                    color: theme.colorScheme.onSurface.withOpacity(0.7),
                     height: 1.4,
                   ),
                 ),
               ),
-              const SizedBox(height: 36),
-              ElevatedButton.icon(
-                onPressed: () => _showAddAvatarDialog(context),
-                icon: const Icon(Icons.add, size: 20),
-                label: const Text(
-                  'CREATE AVATAR',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
+              const SizedBox(height: 48),
+              // Animated button
+              TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0.0, end: 1.0),
+                duration: const Duration(milliseconds: 800),
+                curve: Curves.easeOutBack,
+                builder: (context, value, child) {
+                  return Transform.scale(scale: value, child: child);
+                },
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _showAddAvatarDialog(context),
+                    icon: const Icon(Icons.add, size: 20),
+                    label: const Text(
+                      'CREATE AVATAR',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      foregroundColor: theme.colorScheme.onPrimary,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 18,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 8,
+                      shadowColor: primaryColor.withOpacity(0.5),
+                    ),
                   ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: themeColor,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 28,
-                    vertical: 16,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 4,
                 ),
               ),
             ],
@@ -1358,10 +1240,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                             .withOpacity(
                                               isDarkMode ? 0.3 : 0.2,
                                             ),
+                                        radius: 16,
                                         child: Icon(
                                           avatar.icon,
                                           color: avatarColor,
-                                          size: 16,
+                                          size: 22,
                                         ),
                                       ),
                                       trailing:
@@ -1585,6 +1468,193 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  // Animated AppBar that slides in from the top with fade effect
+  Widget _buildMainContent(
+    BuildContext context,
+    AvatarProvider avatarProvider,
+    ThemeData theme,
+    bool isDarkMode,
+    bool isMobile,
+  ) {
+    return Stack(
+      children: [
+        // Main content
+        Focus(
+          autofocus: true,
+          onKeyEvent: (node, event) {
+            // Handle keyboard shortcuts
+            if (event is KeyDownEvent) {
+              // Escape key to stop playback
+              if (event.logicalKey == LogicalKeyboardKey.escape) {
+                _stopAllPlayback();
+                return KeyEventResult.handled;
+              }
+
+              // Ctrl+F to open search
+              if (event.logicalKey == LogicalKeyboardKey.keyF &&
+                  (HardwareKeyboard.instance.isControlPressed ||
+                      HardwareKeyboard.instance.isMetaPressed)) {
+                _showGlobalSearchDialog(context, avatarProvider);
+                return KeyEventResult.handled;
+              }
+
+              // Ctrl+N to create new avatar
+              if (event.logicalKey == LogicalKeyboardKey.keyN &&
+                  (HardwareKeyboard.instance.isControlPressed ||
+                      HardwareKeyboard.instance.isMetaPressed)) {
+                _showAddAvatarDialog(context);
+                return KeyEventResult.handled;
+              }
+
+              // Space to play/pause selected voice
+              if (event.logicalKey == LogicalKeyboardKey.space) {
+                // If there's a currently selected avatar, play/pause its first voice
+                if (avatarProvider.selectedAvatar != null &&
+                    avatarProvider.selectedAvatar!.voices.isNotEmpty) {
+                  _playOrPauseVoice(
+                    avatarProvider.selectedAvatar!.voices.first,
+                  );
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              }
+
+              // Arrow keys for navigation
+              if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
+                  event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                // Navigate between voices in the selected avatar
+                if (avatarProvider.selectedAvatar != null) {
+                  // Implementation would depend on your UI structure
+                  // This is a placeholder for the navigation logic
+                  HapticFeedback.lightImpact();
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              }
+
+              if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
+                  event.logicalKey == LogicalKeyboardKey.arrowRight) {
+                // Navigate between avatars
+                final avatars = avatarProvider.avatars;
+                if (avatars.isNotEmpty) {
+                  int currentIndex = -1;
+                  if (avatarProvider.selectedAvatar != null) {
+                    currentIndex = avatars.indexWhere(
+                      (a) => a.id == avatarProvider.selectedAvatar!.id,
+                    );
+                  }
+
+                  int newIndex;
+                  if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                    // Move to previous avatar
+                    newIndex =
+                        currentIndex > 0
+                            ? currentIndex - 1
+                            : avatars.length - 1;
+                  } else {
+                    // Move to next avatar
+                    newIndex = (currentIndex + 1) % avatars.length;
+                  }
+
+                  avatarProvider.setSelectedAvatar(avatars[newIndex].id);
+                  HapticFeedback.lightImpact();
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              }
+            }
+            return KeyEventResult.ignored;
+          },
+          child: SafeArea(
+            child: AnimatedBuilder(
+              animation: _appEntranceController,
+              builder: (context, child) {
+                return FadeTransition(
+                  opacity: Tween<double>(begin: 0.0, end: 1.0).animate(
+                    CurvedAnimation(
+                      parent: _appEntranceController,
+                      curve: Interval(0.3, 1.0, curve: Curves.easeOut),
+                    ),
+                  ),
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.1),
+                      end: Offset.zero,
+                    ).animate(
+                      CurvedAnimation(
+                        parent: _appEntranceController,
+                        curve: Interval(0.3, 1.0, curve: Curves.easeOutQuint),
+                      ),
+                    ),
+                    child: child,
+                  ),
+                );
+              },
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isMobile ? 12.0 : 16.0,
+                ),
+                child:
+                    avatarProvider.isLoading
+                        ? _buildLoadingState()
+                        : avatarProvider.errorMessage != null
+                        ? _buildErrorState(avatarProvider.errorMessage!)
+                        : avatarProvider.avatars.isEmpty
+                        ? _buildEmptyState()
+                        : _buildAllAvatarsView(context, avatarProvider.avatars),
+              ),
+            ),
+          ),
+        ),
+
+        // Deletion overlay with animation
+        if (avatarProvider.isDeletingAvatar)
+          AnimatedOpacity(
+            opacity: avatarProvider.isDeletingAvatar ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeOut,
+            child: Container(
+              color: theme.colorScheme.surface.withOpacity(0.7),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: AnimationConfiguration.toStaggeredList(
+                    duration: const Duration(milliseconds: 400),
+                    childAnimationBuilder:
+                        (widget) => SlideAnimation(
+                          verticalOffset: 30.0,
+                          child: FadeInAnimation(child: widget),
+                        ),
+                    children: [
+                      CircularProgressIndicator(
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Deleting avatar...',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w300,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Please wait, this may take a moment.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -1857,29 +1927,38 @@ class _HoverIconButtonState extends State<_HoverIconButton> {
         message: widget.tooltip,
         child: IconButton(
           icon: TweenAnimationBuilder<double>(
-            tween: Tween<double>(begin: 0, end: _isHovering ? 1.0 : 0.0),
+            tween: Tween<double>(
+              begin: 0,
+              end: _isHovering && !isMobile ? 1.0 : 0.0,
+            ),
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutBack,
             builder: (context, value, child) {
-              return Transform.scale(
-                scale: 1.0 + (value * 0.2),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  decoration: BoxDecoration(
-                    color:
-                        _isHovering
-                            ? widget.hoverColor.withOpacity(0.1)
-                            : Colors.transparent,
-                    shape: BoxShape.circle,
-                  ),
-                  padding: const EdgeInsets.all(4),
-                  child: Icon(
-                    widget.icon,
-                    size: widget.size,
-                    color: Color.lerp(widget.color, widget.hoverColor, value),
-                  ),
-                ),
+              Widget iconWidget = Icon(
+                widget.icon,
+                size: widget.size,
+                color: _isHovering ? widget.hoverColor : widget.color,
               );
+
+              if (isMobile) {
+                return iconWidget;
+              } else {
+                return Transform.scale(
+                  scale: 1.0 + (value * 0.2),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    decoration: BoxDecoration(
+                      color:
+                          _isHovering
+                              ? widget.hoverColor.withOpacity(0.1)
+                              : Colors.transparent,
+                      shape: BoxShape.circle,
+                    ),
+                    padding: const EdgeInsets.all(4),
+                    child: iconWidget,
+                  ),
+                );
+              }
             },
           ),
           onPressed: widget.onPressed,
@@ -2265,4 +2344,100 @@ class _AnimatedPopupMenuButtonState<T>
       ),
     );
   }
+}
+
+// Custom shimmer animation for text
+class AnimatedShimmer extends StatefulWidget {
+  final Widget child;
+
+  const AnimatedShimmer({super.key, required this.child});
+
+  @override
+  State<AnimatedShimmer> createState() => _AnimatedShimmerState();
+}
+
+class _AnimatedShimmerState extends State<AnimatedShimmer>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    _animation = Tween<double>(
+      begin: 0.8,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Opacity(opacity: _animation.value, child: widget.child);
+      },
+    );
+  }
+}
+
+// Animated AppBar that slides in from the top with fade effect
+class AnimatedAppBar extends StatelessWidget implements PreferredSizeWidget {
+  final Animation<double> animation;
+  final String title;
+  final bool isMobile;
+  final List<Widget> actions;
+  final ThemeData theme;
+
+  const AnimatedAppBar({
+    super.key,
+    required this.animation,
+    required this.title,
+    required this.isMobile,
+    required this.actions,
+    required this.theme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SlideTransition(
+      position: Tween<Offset>(
+        begin: const Offset(0, -1),
+        end: Offset.zero,
+      ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutQuint)),
+      child: FadeTransition(
+        opacity: animation,
+        child: AppBar(
+          title: Text(
+            title,
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+              fontSize: isMobile ? 16 : 18,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+          centerTitle: true,
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          foregroundColor: theme.colorScheme.onSurface,
+          actions: actions,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 }

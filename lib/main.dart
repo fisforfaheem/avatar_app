@@ -4,9 +4,10 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io' show Platform, Directory;
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
-import 'package:flutter/semantics.dart';
+import 'package:window_manager/window_manager.dart';
 import 'providers/avatar_provider.dart';
 import 'providers/theme_provider.dart';
+import 'providers/audio_routing_provider.dart';
 import 'config/theme_config.dart';
 import 'screens/avatar_detail_screen.dart';
 import 'screens/add_avatar_screen.dart';
@@ -18,6 +19,26 @@ import 'screens/settings_screen.dart';
 Future<void> main() async {
   // Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Set up window manager for desktop platforms
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    await windowManager.ensureInitialized();
+
+    WindowOptions windowOptions = const WindowOptions(
+      size: Size(1280, 720),
+      center: true,
+      backgroundColor: Colors.transparent,
+      skipTaskbar: false,
+      titleBarStyle: TitleBarStyle.normal,
+      title: "Voice Avatar Hub",
+      minimumSize: Size(800, 600),
+    );
+
+    await windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
+  }
 
   // Note: If you're seeing "Failed to update ui::AXTree" errors in the console,
   // these are related to Flutter's Windows accessibility implementation and can be safely ignored.
@@ -31,6 +52,7 @@ Future<void> main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => AvatarProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => AudioRoutingProvider()),
       ],
       child: const MainApp(),
     ),

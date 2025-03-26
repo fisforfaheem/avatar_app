@@ -241,8 +241,8 @@ class _AvatarTileState extends State<AvatarTile> {
                       children: [
                         // Avatar icon
                         Container(
-                          width: isMobile ? 48 : 56,
-                          height: isMobile ? 48 : 56,
+                          width: isMobile ? 60 : 70,
+                          height: isMobile ? 60 : 70,
                           decoration: BoxDecoration(
                             color: color,
                             shape: BoxShape.circle,
@@ -251,7 +251,7 @@ class _AvatarTileState extends State<AvatarTile> {
                             child: Icon(
                               widget.avatar.icon,
                               color: Colors.white,
-                              size: isMobile ? 24 : 28,
+                              size: isMobile ? 30 : 34,
                             ),
                           ),
                         ),
@@ -259,28 +259,28 @@ class _AvatarTileState extends State<AvatarTile> {
                         // Voice count badge
                         Container(
                           padding: EdgeInsets.symmetric(
-                            horizontal: isMobile ? 8 : 10,
-                            vertical: isMobile ? 3 : 4,
+                            horizontal: isMobile ? 10 : 12,
+                            vertical: isMobile ? 5 : 6,
                           ),
                           decoration: BoxDecoration(
                             color: color.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(16),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
                                 Icons.mic,
-                                size: isMobile ? 14 : 16,
+                                size: isMobile ? 16 : 18,
                                 color: color,
                               ),
-                              SizedBox(width: isMobile ? 3 : 4),
+                              SizedBox(width: isMobile ? 4 : 5),
                               Text(
                                 '${widget.avatar.voices.length}',
                                 style: TextStyle(
                                   color: color,
                                   fontWeight: FontWeight.w500,
-                                  fontSize: isMobile ? 12 : 14,
+                                  fontSize: isMobile ? 14 : 16,
                                 ),
                               ),
                             ],

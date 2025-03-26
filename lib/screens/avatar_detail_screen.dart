@@ -116,8 +116,8 @@ class AvatarDetailScreen extends StatelessWidget {
                           children: [
                             // Avatar icon
                             Container(
-                              width: isDesktop ? 96 : 64,
-                              height: isDesktop ? 96 : 64,
+                              width: isDesktop ? 120 : 80,
+                              height: isDesktop ? 120 : 80,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: Colors.white.withOpacity(0.2),
@@ -132,7 +132,7 @@ class AvatarDetailScreen extends StatelessWidget {
                               child: Center(
                                 child: Icon(
                                   avatar.icon,
-                                  size: isDesktop ? 48 : 36,
+                                  size: isDesktop ? 60 : 48,
                                   color: Colors.white,
                                 ),
                               ),

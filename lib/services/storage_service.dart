@@ -6,370 +6,562 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/avatar.dart';
 
-/// A service that handles storing and retrieving avatar data from local storage
+/// Handles the nitty-gritty of saving and loading avatar data.
+///
+/// This service takes care of:
+/// - Storing the list of `Avatar` objects (as JSON) in `SharedPreferences`.
+/// - Loading the list back from `SharedPreferences`.
+/// - Saving individual audio files (`.mp3`, `.wav`, etc.) to the device's file system.
+/// - Deleting those audio files.
+/// - Providing methods to clear all stored data (both preferences and files).
+/// - Converting `Avatar` and `Voice` objects to/from JSON.
 class StorageService {
-  // Keys for SharedPreferences
-  static const String _avatarsKey = 'avatars';
-  static const String _lastSyncKey = 'last_sync';
+  // --- Constants for SharedPreferences Keys ---
+  // Using constants makes it easier to avoid typos when accessing preferences.
+  static const String _avatarsKey =
+      'avatars_data_v2'; // Key for the main avatar JSON string (v2 includes imagePath)
+  static const String _lastSyncKey =
+      'last_storage_sync'; // Key for timestamp of last save
+  static const String _audioDirName =
+      'audio_files'; // Name of the subdirectory for audio
 
-  /// Save avatars to local storage
-  ///
-  /// This method serializes the list of avatars to JSON and stores it in SharedPreferences
+  // --- Avatar List Persistence (SharedPreferences) ---
+
+  /// Saves the provided list of `Avatar` objects to `SharedPreferences`.
+  /// Converts the list to a JSON string first.
+  /// Returns `true` if saving was successful, `false` otherwise.
   Future<bool> saveAvatars(List<Avatar> avatars) async {
     try {
-      // Get SharedPreferences instance
+      debugPrint(
+        '[StorageService] Attempting to save ${avatars.length} avatars...',
+      );
+      // Get the SharedPreferences instance (like opening the app's private storage box).
       final prefs = await SharedPreferences.getInstance();
 
-      // If the list is empty, save an empty JSON array
+      // Handle the case where the list is empty - store an empty JSON array.
       if (avatars.isEmpty) {
+        debugPrint('[StorageService] Saving empty avatar list.');
         final success = await prefs.setString(_avatarsKey, '[]');
         if (success) {
+          // Update the sync time even for an empty list save.
           await prefs.setString(_lastSyncKey, DateTime.now().toIso8601String());
         }
         return success;
       }
 
-      // Convert avatars to a list of JSON maps
-      final List<Map<String, dynamic>> avatarsJson = [];
-
-      // Process each avatar individually to prevent one bad avatar from failing the entire save
+      // Convert the list of Avatar objects into a list of JSON-representable Maps.
+      // We do this carefully, handling potential errors for individual avatars.
+      final List<Map<String, dynamic>> avatarsJsonList = [];
       for (final avatar in avatars) {
         try {
-          // Convert each avatar to a JSON map
+          // Use our helper function to convert one Avatar to a Map.
           final avatarJson = _avatarToJson(avatar);
-          avatarsJson.add(avatarJson);
-        } catch (e) {
-          // Log the error but continue with other avatars
-          debugPrint('Error converting avatar ${avatar.id} to JSON: $e');
+          avatarsJsonList.add(avatarJson);
+        } catch (e, stackTrace) {
+          // Log an error if a specific avatar fails conversion, but keep going.
+          debugPrint(
+            '[StorageService] Error converting avatar ${avatar.id} to JSON: $e\n$stackTrace',
+          );
+          // Optionally, skip adding this avatar to avoid corrupting the whole save.
         }
       }
 
-      // Encode the JSON list to a string
-      String jsonString;
-      try {
-        jsonString = jsonEncode(avatarsJson);
-      } catch (e) {
-        debugPrint('Error encoding avatars to JSON: $e');
+      // If all avatars failed conversion (unlikely), don't save.
+      if (avatarsJsonList.isEmpty && avatars.isNotEmpty) {
+        debugPrint(
+          '[StorageService] All avatars failed JSON conversion. Save aborted.',
+        );
         return false;
       }
 
-      // Store the JSON string in SharedPreferences
+      // Encode the entire list of maps into a single JSON string.
+      String jsonString;
+      try {
+        jsonString = jsonEncode(avatarsJsonList);
+      } catch (e, stackTrace) {
+        // This error means the overall structure couldn't be encoded.
+        debugPrint(
+          '[StorageService] Error encoding avatar list to JSON: $e\n$stackTrace',
+        );
+        return false; // Can't save if encoding fails.
+      }
+
+      // Finally, save the JSON string to SharedPreferences using our key.
+      debugPrint(
+        '[StorageService] Saving JSON string (${jsonString.length} chars) to key "$_avatarsKey"',
+      );
       final success = await prefs.setString(_avatarsKey, jsonString);
 
-      // Update last sync time
+      // If saving the string was successful, update the last sync timestamp.
       if (success) {
         await prefs.setString(_lastSyncKey, DateTime.now().toIso8601String());
+        debugPrint('[StorageService] Avatars saved successfully.');
+      } else {
+        debugPrint(
+          '[StorageService] Failed to save avatars JSON string to SharedPreferences.',
+        );
       }
 
       return success;
-    } catch (e) {
-      debugPrint('Error saving avatars: $e');
+    } catch (e, stackTrace) {
+      // Catch-all for unexpected errors during the save process.
+      debugPrint(
+        '[StorageService] Unexpected error saving avatars: $e\n$stackTrace',
+      );
       return false;
     }
   }
 
-  /// Load avatars from local storage
-  ///
-  /// This method retrieves the JSON string from SharedPreferences and deserializes it to a list of avatars
+  /// Loads the list of `Avatar` objects from `SharedPreferences`.
+  /// Reads the JSON string and deserializes it back into `Avatar` objects.
+  /// Returns an empty list if no data is found or if an error occurs.
   Future<List<Avatar>> loadAvatars() async {
     try {
-      // Get SharedPreferences instance
+      debugPrint(
+        '[StorageService] Attempting to load avatars from key "$_avatarsKey"...',
+      );
       final prefs = await SharedPreferences.getInstance();
 
-      // Get the JSON string from SharedPreferences
-      final String? avatarsJson = prefs.getString(_avatarsKey);
+      // Retrieve the saved JSON string.
+      final String? avatarsJsonString = prefs.getString(_avatarsKey);
 
-      // If no data is found, return an empty list
-      if (avatarsJson == null || avatarsJson.isEmpty) {
+      // If there's no saved string (or it's empty), return an empty list.
+      if (avatarsJsonString == null || avatarsJsonString.isEmpty) {
+        debugPrint(
+          '[StorageService] No avatar data found in SharedPreferences.',
+        );
         return [];
       }
 
-      // Decode the JSON string to a list of maps
-      // Add extra validation to handle empty JSON
+      debugPrint(
+        '[StorageService] Found JSON string (${avatarsJsonString.length} chars). Decoding...',
+      );
+
+      // Decode the JSON string into a Dart List<dynamic> (list of maps).
+      List<dynamic> decodedJsonList;
       try {
-        final List<dynamic> decodedJson = jsonDecode(avatarsJson);
-
-        // If the decoded JSON is empty, return an empty list
-        if (decodedJson.isEmpty) {
-          return [];
-        }
-
-        // Convert each map to an Avatar object
-        return decodedJson
-            .map<Avatar>((json) => _avatarFromJson(json))
-            .toList();
-      } catch (jsonError) {
-        debugPrint('Error decoding JSON: $jsonError');
-        // If there's an error decoding the JSON, clear the corrupted data
-        await prefs.remove(_avatarsKey);
+        decodedJsonList = jsonDecode(avatarsJsonString);
+      } catch (e, stackTrace) {
+        // If decoding fails, the stored data is corrupt. Log it and return empty.
+        debugPrint(
+          '[StorageService] CRITICAL: Error decoding avatars JSON: $e\n$stackTrace',
+        );
+        debugPrint('[StorageService] Corrupt JSON data: $avatarsJsonString');
+        // Consider removing the corrupt data here to prevent repeated load failures.
+        // await prefs.remove(_avatarsKey);
         return [];
       }
-    } catch (e) {
-      debugPrint('Error loading avatars: $e');
-      return [];
+
+      // If the decoded JSON is not a list or is empty, return empty.
+      if (decodedJsonList.isEmpty) {
+        debugPrint('[StorageService] Decoded JSON is empty or not a list.');
+        return [];
+      }
+
+      // Convert each map in the list back into an Avatar object.
+      final List<Avatar> loadedAvatars = [];
+      for (final item in decodedJsonList) {
+        // Ensure the item is actually a Map before trying to parse it.
+        if (item is Map<String, dynamic>) {
+          try {
+            // Use our helper function to convert the map back to an Avatar.
+            loadedAvatars.add(_avatarFromJson(item));
+          } catch (e, stackTrace) {
+            // Log an error if a specific avatar fails parsing, but continue.
+            final id = item['id'] ?? 'unknown';
+            debugPrint(
+              '[StorageService] Error parsing avatar with ID $id from JSON: $e\n$stackTrace',
+            );
+            // Optionally, skip this avatar.
+          }
+        } else {
+          debugPrint(
+            '[StorageService] Skipped non-map item in decoded JSON list: $item',
+          );
+        }
+      }
+
+      debugPrint(
+        '[StorageService] Successfully loaded and parsed ${loadedAvatars.length} avatars.',
+      );
+      return loadedAvatars;
+    } catch (e, stackTrace) {
+      // Catch-all for unexpected errors during loading.
+      debugPrint(
+        '[StorageService] Unexpected error loading avatars: $e\n$stackTrace',
+      );
+      return []; // Return empty list on error.
     }
   }
 
-  /// Get the last sync time
+  /// Retrieves the timestamp of the last successful avatar save operation.
   Future<DateTime?> getLastSyncTime() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final String? lastSyncString = prefs.getString(_lastSyncKey);
 
       if (lastSyncString == null || lastSyncString.isEmpty) {
-        return null;
+        return null; // No sync time recorded yet.
       }
 
+      // Parse the stored ISO 8601 string back into a DateTime object.
       return DateTime.parse(lastSyncString);
-    } catch (e) {
-      debugPrint('Error getting last sync time: $e');
+    } catch (e, stackTrace) {
+      debugPrint(
+        '[StorageService] Error getting last sync time: $e\n$stackTrace',
+      );
       return null;
     }
   }
 
-  /// Clear all data from storage
-  ///
-  /// This method removes all avatar data from SharedPreferences and deletes all audio files
-  Future<void> clearAllData() async {
-    debugPrint('[StorageService] Starting clearAllData...');
+  // --- Audio File Persistence (File System) ---
 
-    // Track what operations succeeded
-    bool prefsCleared = false;
-    bool filesDeleted = false;
-
-    try {
-      // Clear SharedPreferences data
-      debugPrint('[StorageService] Clearing SharedPreferences data...');
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove(_avatarsKey);
-        await prefs.remove(_lastSyncKey);
-
-        // Clear any other app-specific preferences
-        // Add any additional keys that need to be cleared here
-
-        prefsCleared = true;
-        debugPrint(
-          '[StorageService] Successfully cleared SharedPreferences data',
-        );
-      } catch (prefsError) {
-        debugPrint(
-          '[StorageService] Error clearing SharedPreferences: $prefsError',
-        );
-        // Continue to file deletion even if prefs clearing fails
-      }
-
-      // Clear audio files directory
-      if (!kIsWeb) {
-        debugPrint('[StorageService] Clearing audio files directory...');
-        try {
-          final appDocDir = await getApplicationDocumentsDirectory();
-          final audioDir = Directory('${appDocDir.path}/audio_files');
-
-          if (await audioDir.exists()) {
-            // Delete all files in the directory
-            debugPrint(
-              '[StorageService] Audio directory exists, listing files...',
-            );
-            final files = await audioDir.list().toList();
-            debugPrint(
-              '[StorageService] Found ${files.length} files to delete',
-            );
-
-            int deletedCount = 0;
-            int errorCount = 0;
-
-            for (final file in files) {
-              if (file is File) {
-                try {
-                  await file.delete();
-                  deletedCount++;
-                  // Add a small delay between deletions
-                  await Future.delayed(const Duration(milliseconds: 10));
-                } catch (e) {
-                  errorCount++;
-                  debugPrint(
-                    '[StorageService] Error deleting file ${file.path}: $e',
-                  );
-                  // Continue with other files even if this one fails
-                }
-              }
-            }
-
-            debugPrint(
-              '[StorageService] Deleted $deletedCount files with $errorCount errors',
-            );
-            filesDeleted = true;
-          } else {
-            debugPrint(
-              '[StorageService] Audio directory does not exist, nothing to delete',
-            );
-            filesDeleted =
-                true; // Consider it successful if directory doesn't exist
-          }
-        } catch (e) {
-          debugPrint(
-            '[StorageService] Error clearing audio files directory: $e',
-          );
-          // Continue even if clearing the directory fails
-        }
-      } else {
-        debugPrint(
-          '[StorageService] Running on web platform, skipping file deletion',
-        );
-        filesDeleted = true; // Consider it successful on web
-      }
-
+  /// Gets the directory where audio files should be stored.
+  /// Creates it if it doesn't exist.
+  /// Returns null if the directory cannot be obtained or created (e.g., on web).
+  Future<Directory?> _getAudioDirectory() async {
+    if (kIsWeb) {
       debugPrint(
-        '[StorageService] clearAllData completed - Prefs cleared: $prefsCleared, Files deleted: $filesDeleted',
+        '[StorageService] Cannot get audio directory on web platform.',
       );
-    } catch (e) {
-      debugPrint('[StorageService] Error in clearAllData: $e');
-      rethrow; // Rethrow to allow caller to handle the error
+      return null; // File system access is different on web.
+    }
+    try {
+      // Find the standard directory for application documents.
+      final appDocDir = await getApplicationDocumentsDirectory();
+      // Define the path for our dedicated audio subdirectory.
+      final audioDirPath = '${appDocDir.path}/$_audioDirName';
+      final audioDir = Directory(audioDirPath);
+
+      // Check if the directory exists. If not, create it.
+      if (!await audioDir.exists()) {
+        debugPrint(
+          '[StorageService] Audio directory not found. Creating at: $audioDirPath',
+        );
+        // `recursive: true` creates parent directories if needed (though unlikely here).
+        await audioDir.create(recursive: true);
+        debugPrint('[StorageService] Audio directory created.');
+      }
+      return audioDir;
+    } catch (e, stackTrace) {
+      debugPrint(
+        '[StorageService] Error getting/creating audio directory: $e\n$stackTrace',
+      );
+      return null;
     }
   }
 
-  /// Save audio file to local storage
-  ///
-  /// This method saves an audio file to the application documents directory
+  /// Saves the provided audio data (`bytes`) as a file with the given `fileName`
+  /// within the app's dedicated audio directory.
+  /// Returns the full path to the saved file.
+  /// Throws an error if saving fails.
   Future<String> saveAudioFile(String fileName, List<int> bytes) async {
+    // Get the audio storage directory.
+    final audioDir = await _getAudioDirectory();
+    if (audioDir == null) {
+      throw FileSystemException(
+        'Could not get audio directory (platform unsupported or error).',
+      );
+    }
+
+    // TODO: Sanitize fileName? Ensure it doesn't contain path separators etc.
+    final safeFileName = fileName.replaceAll(
+      RegExp(r'[\/\\:*?"<>|]'),
+      '_',
+    ); // Basic sanitization
+    final filePath = '${audioDir.path}/$safeFileName';
+    debugPrint('[StorageService] Saving audio file to: $filePath');
+
     try {
-      // Get the application documents directory
-      final directory = await getApplicationDocumentsDirectory();
-
-      // Create a subdirectory for audio files if it doesn't exist
-      final audioDir = Directory('${directory.path}/audio_files');
-      if (!await audioDir.exists()) {
-        await audioDir.create(recursive: true);
-      }
-
-      // Create the file path
-      final filePath = '${audioDir.path}/$fileName';
-
-      // Write the bytes to the file
+      // Create a File object representing the target path.
       final file = File(filePath);
+      // Write the byte data to the file. This overwrites if the file exists.
       await file.writeAsBytes(bytes);
-
-      return filePath;
-    } catch (e) {
-      debugPrint('Error saving audio file: $e');
+      debugPrint('[StorageService] Audio file saved successfully.');
+      return filePath; // Return the path where the file was saved.
+    } catch (e, stackTrace) {
+      debugPrint(
+        '[StorageService] Error writing audio file $filePath: $e\n$stackTrace',
+      );
+      // Rethrow the error so the caller (e.g., AvatarProvider) knows it failed.
       rethrow;
     }
   }
 
-  /// Delete audio file from local storage
+  /// Deletes the audio file at the specified `filePath`.
+  /// Returns `true` if the file was deleted or didn't exist, `false` on error.
   Future<bool> deleteAudioFile(String filePath) async {
-    try {
-      // Check if the file path is valid
-      if (filePath.isEmpty) {
-        debugPrint('Cannot delete file: Empty file path');
-        return false;
-      }
+    // Basic check: Don't try to delete if the path is empty.
+    if (filePath.isEmpty) {
+      debugPrint(
+        '[StorageService] Cannot delete file: Empty file path provided.',
+      );
+      return false;
+    }
 
+    // Skip deletion on web as file paths might not be standard file system paths.
+    if (kIsWeb) {
+      debugPrint(
+        '[StorageService] Skipping file deletion on web for path: $filePath',
+      );
+      return true; // Consider it deleted on web for consistency
+    }
+
+    try {
       final file = File(filePath);
+      debugPrint('[StorageService] Attempting to delete file: $filePath');
+
+      // Check if the file actually exists before trying to delete.
       if (await file.exists()) {
         try {
           await file.delete();
+          debugPrint('[StorageService] File deleted successfully.');
           return true;
-        } catch (deleteError) {
-          // Handle specific file deletion errors
-          debugPrint('Error deleting file $filePath: $deleteError');
+        } catch (deleteError, stackTrace) {
+          // Log the specific error during deletion.
+          debugPrint(
+            '[StorageService] Error deleting file $filePath: $deleteError\n$stackTrace',
+          );
 
-          // Try to delete the file again after a short delay
-          await Future.delayed(const Duration(milliseconds: 100));
-          try {
-            if (await file.exists()) {
-              await file.delete();
-              return true;
-            }
-          } catch (retryError) {
-            debugPrint('Retry failed to delete file $filePath: $retryError');
-          }
+          // Optional: Retry logic (could be useful for temporary locks)
+          // await Future.delayed(const Duration(milliseconds: 100));
+          // try {
+          //   if (await file.exists()) { await file.delete(); return true; }
+          // } catch (retryError) { ... }
+          return false; // Return false if deletion failed.
         }
       } else {
-        // File doesn't exist, so consider it "deleted"
-        debugPrint('File does not exist: $filePath');
+        // If the file doesn't exist, we can consider the deletion successful.
+        debugPrint(
+          '[StorageService] File does not exist, deletion skipped (considered success).',
+        );
         return true;
       }
-      return false;
-    } catch (e) {
-      debugPrint('Error deleting audio file: $e');
+    } catch (e, stackTrace) {
+      // Catch unexpected errors (e.g., issues with File constructor itself).
+      debugPrint(
+        '[StorageService] Unexpected error during file deletion check for $filePath: $e\n$stackTrace',
+      );
       return false;
     }
   }
 
-  // Helper method to convert an Avatar to a JSON map
+  // --- Data Clearing ---
+
+  /// Clears *all* data managed by this service:
+  /// - Avatar list from SharedPreferences.
+  /// - Last sync time from SharedPreferences.
+  /// - All files within the dedicated audio directory.
+  Future<void> clearAllData() async {
+    debugPrint(
+      '[StorageService] WARNING: Clearing ALL stored data (prefs and files)... 💣',
+    );
+
+    bool prefsCleared = false;
+    bool filesCleared = false;
+
+    // 1. Clear SharedPreferences
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final r1 = await prefs.remove(_avatarsKey);
+      final r2 = await prefs.remove(_lastSyncKey);
+      // Add other keys here if needed: await prefs.remove('some_other_key');
+      prefsCleared = r1 && r2; // Check if removals were successful
+      debugPrint(
+        '[StorageService] SharedPreferences cleared (success: $prefsCleared).',
+      );
+    } catch (e, stackTrace) {
+      debugPrint(
+        '[StorageService] Error clearing SharedPreferences: $e\n$stackTrace',
+      );
+    }
+
+    // 2. Clear Audio Files Directory
+    final audioDir = await _getAudioDirectory();
+    if (audioDir != null) {
+      try {
+        debugPrint(
+          '[StorageService] Clearing audio files in directory: ${audioDir.path}',
+        );
+        if (await audioDir.exists()) {
+          // Delete the entire directory and its contents.
+          await audioDir.delete(recursive: true);
+          // Optionally recreate the empty directory immediately.
+          await audioDir.create(recursive: true);
+          filesCleared = true;
+          debugPrint(
+            '[StorageService] Audio files directory cleared and recreated.',
+          );
+        } else {
+          debugPrint(
+            '[StorageService] Audio directory did not exist, no files to clear.',
+          );
+          filesCleared = true; // Considered success if dir doesn't exist.
+        }
+      } catch (e, stackTrace) {
+        debugPrint(
+          '[StorageService] Error clearing audio files directory: $e\n$stackTrace',
+        );
+      }
+    } else {
+      // If _getAudioDirectory returned null (e.g., web), consider files cleared.
+      filesCleared = true;
+      debugPrint(
+        '[StorageService] Skipping audio file clearing (platform unsupported or error).',
+      );
+    }
+
+    debugPrint(
+      '[StorageService] clearAllData finished. Prefs: $prefsCleared, Files: $filesCleared',
+    );
+
+    // Optionally throw an error if clearing failed partially or completely.
+    // if (!prefsCleared || !filesCleared) {
+    //   throw Exception('Failed to clear all storage data.');
+    // }
+  }
+
+  // --- JSON Conversion Helpers --- //
+  // These methods handle the conversion between Dart objects and JSON maps.
+
+  /// Converts an `Avatar` object into a Map suitable for JSON encoding.
   Map<String, dynamic> _avatarToJson(Avatar avatar) {
     return {
       'id': avatar.id,
       'name': avatar.name,
       'color': avatar.color,
-      'icon': _iconDataToString(avatar.icon),
+      'icon': _iconDataToString(avatar.icon), // Convert IconData to string
+      // Recursively convert the list of Voice objects.
       'voices': avatar.voices.map((voice) => _voiceToJson(voice)).toList(),
+      // Added in v2
       'imagePath': avatar.imagePath,
     };
   }
 
-  // Helper method to convert a JSON map to an Avatar
+  /// Converts a Map (typically from decoded JSON) into an `Avatar` object.
   Avatar _avatarFromJson(Map<String, dynamic> json) {
-    return Avatar(
-      id: json['id'],
-      name: json['name'],
-      color: json['color'],
-      icon: _stringToIconData(json['icon']),
-      voices:
+    // Extract voices, ensuring it's a List and handling potential errors during Voice parsing.
+    List<Voice> voices = [];
+    if (json['voices'] is List) {
+      voices =
           (json['voices'] as List)
-              .map<Voice>((voiceJson) => _voiceFromJson(voiceJson))
-              .toList(),
-      imagePath: json['imagePath'],
+              .map<Voice?>((voiceJson) {
+                if (voiceJson is Map<String, dynamic>) {
+                  try {
+                    return _voiceFromJson(voiceJson);
+                  } catch (e) {
+                    debugPrint(
+                      '[StorageService] Error parsing voice from JSON: $e. Skipping voice.',
+                    );
+                    return null;
+                  }
+                }
+                return null;
+              })
+              .whereType<Voice>()
+              .toList(); // Filter out nulls from failed parsing
+    }
+
+    return Avatar(
+      // Provide default values or handle nulls gracefully for robustness.
+      id:
+          json['id'] as String? ??
+          'missing_id_${DateTime.now().millisecondsSinceEpoch}', // Ensure ID exists
+      name: json['name'] as String? ?? 'Unnamed Avatar',
+      color:
+          json['color']
+              as String?, // Allow null color, constructor will handle default
+      icon:
+          json['icon'] != null
+              ? _stringToIconData(json['icon'] as String)
+              : null, // Handle null icon string
+      voices: voices,
+      imagePath: json['imagePath'] as String?, // Added in v2
     );
   }
 
-  // Helper method to convert a Voice to a JSON map
+  /// Converts a `Voice` object into a Map suitable for JSON encoding.
   Map<String, dynamic> _voiceToJson(Voice voice) {
     return {
       'id': voice.id,
       'name': voice.name,
       'audioUrl': voice.audioUrl,
-      'duration': voice.duration.inMilliseconds,
-      'createdAt': voice.createdAt.toIso8601String(),
+      'duration':
+          voice.duration.inMilliseconds, // Store duration as milliseconds
+      'createdAt':
+          voice.createdAt.toIso8601String(), // Store dates as ISO 8601 strings
       'category': voice.category,
       'playCount': voice.playCount,
-      'lastPlayed': voice.lastPlayed?.toIso8601String(),
-      'color': voice.color,
+      'lastPlayed':
+          voice.lastPlayed?.toIso8601String(), // Handle nullable DateTime
+      'color': voice.color, // Store voice-specific color
     };
   }
 
-  // Helper method to convert a JSON map to a Voice
+  /// Converts a Map (typically from decoded JSON) into a `Voice` object.
   Voice _voiceFromJson(Map<String, dynamic> json) {
     return Voice(
-      id: json['id'],
-      name: json['name'],
-      audioUrl: json['audioUrl'],
-      duration: Duration(milliseconds: json['duration']),
-      createdAt: DateTime.parse(json['createdAt']),
-      category: json['category'],
-      playCount: json['playCount'],
+      id:
+          json['id'] as String? ??
+          'missing_id_${DateTime.now().millisecondsSinceEpoch}', // Ensure ID exists
+      name: json['name'] as String? ?? 'Unnamed Voice',
+      audioUrl: json['audioUrl'] as String? ?? '', // Ensure audioUrl exists
+      // Parse duration from milliseconds, default to zero if missing/invalid.
+      duration: Duration(milliseconds: (json['duration'] as int?) ?? 0),
+      // Parse DateTime, default to now if missing/invalid.
+      createdAt:
+          json['createdAt'] != null
+              ? (DateTime.tryParse(json['createdAt'] as String) ??
+                  DateTime.now())
+              : DateTime.now(),
+      category: json['category'] as String? ?? 'Uncategorized',
+      playCount: (json['playCount'] as int?) ?? 0,
+      // Parse nullable DateTime.
       lastPlayed:
           json['lastPlayed'] != null
-              ? DateTime.parse(json['lastPlayed'])
+              ? DateTime.tryParse(json['lastPlayed'] as String)
               : null,
-      color: json['color'],
+      color: json['color'] as String?, // Allow null color
     );
   }
 
-  // Helper method to convert IconData to a string
-  String _iconDataToString(IconData icon) {
-    return '${icon.codePoint}:${icon.fontFamily}:${icon.fontPackage}';
+  /// Converts `IconData` to a simple string representation for storage.
+  /// Format: "codePoint:fontFamily:fontPackage"
+  /// Nulls are represented as the string "null".
+  String _iconDataToString(IconData? icon) {
+    if (icon == null) return ''; // Return empty string for null icon
+    // Ensure fontFamily and fontPackage are represented correctly if null.
+    return '${icon.codePoint}:${icon.fontFamily ?? 'null'}:${icon.fontPackage ?? 'null'}';
   }
 
-  // Helper method to convert a string to IconData
-  IconData _stringToIconData(String iconString) {
-    final parts = iconString.split(':');
-    return IconData(
-      int.parse(parts[0]),
-      fontFamily: parts[1] == 'null' ? null : parts[1],
-      fontPackage: parts.length > 2 && parts[2] != 'null' ? parts[2] : null,
-    );
+  /// Converts a string (from storage) back into `IconData`.
+  /// Handles the format "codePoint:fontFamily:fontPackage".
+  /// Returns null if the string is empty or invalid.
+  IconData? _stringToIconData(String? iconString) {
+    if (iconString == null || iconString.isEmpty) {
+      return null; // Return null if input is null or empty
+    }
+    try {
+      final parts = iconString.split(':');
+      if (parts.length < 2)
+        throw const FormatException('Invalid IconData string format');
+
+      final codePoint = int.parse(parts[0]);
+      // Handle "null" strings correctly when parsing.
+      final fontFamily = (parts[1] == 'null') ? null : parts[1];
+      final fontPackage =
+          (parts.length > 2 && parts[2] != 'null') ? parts[2] : null;
+
+      return IconData(
+        codePoint,
+        fontFamily: fontFamily,
+        fontPackage: fontPackage,
+      );
+    } catch (e) {
+      debugPrint(
+        '[StorageService] Error converting string "$iconString" to IconData: $e',
+      );
+      return null; // Return null if parsing fails
+    }
   }
 }

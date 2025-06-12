@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -7,6 +6,7 @@ import '../providers/avatar_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/audio_routing_provider.dart';
 import '../widgets/audio_routing_status.dart';
+import '../services/storage_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -16,7 +16,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _isDeleting = false;
+  final bool _isDeleting = false;
 
   @override
   Widget build(BuildContext context) {
@@ -592,109 +592,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // Clear all data
   Future<void> _clearAllData(BuildContext context) async {
-    // Store context in a local variable to check if mounted later
-    final BuildContext localContext = context;
-
-    // Show loading overlay
-    setState(() {
-      _isDeleting = true;
-    });
-
     try {
-      debugPrint('Starting data deletion process...');
+      final cleared = await StorageService().clearAllData();
 
-      // Get the avatar provider
-      final avatarProvider = Provider.of<AvatarProvider>(
-        context,
-        listen: false,
-      );
+      // Ensure the widget is still in the tree before using its context.
+      if (!context.mounted) return;
 
-      // Add haptic feedback
-      HapticFeedback.heavyImpact();
-
-      // Set a timeout to prevent the app from getting stuck indefinitely
-      bool isCompleted = false;
-
-      // Create a timeout that will complete after 10 seconds
-      Future.delayed(const Duration(seconds: 10)).then((_) {
-        if (!isCompleted && mounted) {
-          debugPrint('Data deletion timeout reached - forcing completion');
-          setState(() {
-            _isDeleting = false;
-          });
-          Navigator.of(context).pop();
-        }
-      });
-
-      // Delete all avatars and their data with a try-catch block
-      try {
-        debugPrint('Calling deleteAllAvatars()...');
-        await avatarProvider.deleteAllAvatars();
-        debugPrint('deleteAllAvatars() completed successfully');
-      } catch (deleteError) {
-        debugPrint('Error in deleteAllAvatars(): $deleteError');
-        // Even if there's an error, we'll consider the operation "complete" for UI purposes
-        // This prevents the app from getting stuck in the loading state
-      }
-
-      isCompleted = true;
-
-      // If we're still mounted, hide the loading overlay
-      if (mounted) {
-        debugPrint('Widget is still mounted, updating UI...');
-        setState(() {
-          _isDeleting = false;
-        });
-
-        // Navigate back first
-        debugPrint('Navigating back...');
-        Navigator.of(context).pop();
-
-        // After navigation, show the success message on the new screen
-        debugPrint('Setting up post-frame callback for SnackBar...');
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          try {
-            if (localContext.mounted) {
-              debugPrint('Showing success SnackBar...');
-              ScaffoldMessenger.of(localContext).showSnackBar(
-                SnackBar(
-                  content: const Text('All data has been cleared successfully'),
-                  behavior: SnackBarBehavior.floating,
-                  backgroundColor: Theme.of(localContext).colorScheme.primary,
-                ),
-              );
-            } else {
-              debugPrint('Context is no longer mounted, skipping SnackBar');
-            }
-          } catch (snackBarError) {
-            debugPrint('Error showing SnackBar: $snackBarError');
-          }
-        });
+      if (cleared) {
+        // Use the context to access providers and show snackbars.
+        Provider.of<AvatarProvider>(context, listen: false).reloadAvatars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('All application data has been cleared.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       } else {
-        debugPrint('Widget is no longer mounted, skipping UI updates');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not clear all data. Some files may remain.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     } catch (e) {
-      debugPrint('Top-level error in _clearAllData: $e');
-
-      // If we're still mounted, hide the loading overlay and show error
-      if (mounted) {
-        setState(() {
-          _isDeleting = false;
-        });
-
-        // Show error message
-        try {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error clearing data: ${e.toString()}'),
-              behavior: SnackBarBehavior.floating,
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-          );
-        } catch (snackBarError) {
-          debugPrint('Error showing error SnackBar: $snackBarError');
-        }
-      }
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error clearing data: $e')));
     }
   }
 }

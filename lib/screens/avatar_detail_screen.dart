@@ -97,8 +97,8 @@ class AvatarDetailScreen extends StatelessWidget {
                             colors: [
                               color,
                               isDarkMode
-                                  ? color.withOpacity(0.7)
-                                  : color.withOpacity(0.8),
+                                  ? color.withAlpha(178) // 70%
+                                  : color.withAlpha(204), // 80%
                             ],
                           ),
                           borderRadius: BorderRadius.circular(
@@ -106,7 +106,9 @@ class AvatarDetailScreen extends StatelessWidget {
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: color.withOpacity(isDarkMode ? 0.3 : 0.2),
+                              color: color.withAlpha(
+                                isDarkMode ? 77 : 51,
+                              ), // 30% or 20%
                               blurRadius: isDesktop ? 12 : 8,
                               offset: const Offset(0, 3),
                             ),
@@ -120,10 +122,10 @@ class AvatarDetailScreen extends StatelessWidget {
                               height: isDesktop ? 120 : 80,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: Colors.white.withOpacity(0.2),
+                                color: Colors.white.withAlpha(51), // 20%
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
+                                    color: Colors.black.withAlpha(26), // 10%
                                     blurRadius: isDesktop ? 6 : 4,
                                     offset: const Offset(0, 2),
                                   ),
@@ -156,7 +158,7 @@ class AvatarDetailScreen extends StatelessWidget {
                                     '${avatar.voices.length} voices',
                                     style: TextStyle(
                                       fontSize: isDesktop ? 18 : 16,
-                                      color: Colors.white.withOpacity(0.9),
+                                      color: Colors.white.withAlpha(230), // 90%
                                     ),
                                   ),
                                 ],
@@ -227,7 +229,7 @@ class AvatarDetailScreen extends StatelessWidget {
                                                 ? theme
                                                     .colorScheme
                                                     .onSurfaceVariant
-                                                    .withOpacity(0.5)
+                                                    .withAlpha(128)
                                                 : Colors.grey.shade300,
                                       ),
                                       SizedBox(height: isDesktop ? 24 : 16),
@@ -244,10 +246,37 @@ class AvatarDetailScreen extends StatelessWidget {
                                         'Add your first voice sample below',
                                         style: TextStyle(
                                           fontSize: isDesktop ? 16 : 14,
-                                          color:
-                                              theme
-                                                  .colorScheme
-                                                  .onSurfaceVariant,
+                                          color: theme
+                                              .colorScheme
+                                              .onSurfaceVariant
+                                              .withAlpha(128),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 24),
+                                      // Add voice button (styled differently for empty state)
+                                      ElevatedButton.icon(
+                                        icon: const Icon(Icons.upload_file),
+                                        label: const Text(
+                                          'Upload Your First Voice',
+                                        ),
+                                        onPressed:
+                                            () => _showAddVoiceBottomSheet(
+                                              context,
+                                              avatarProvider,
+                                              avatarId,
+                                            ),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: color,
+                                          foregroundColor: Colors.white,
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: isDesktop ? 24 : 20,
+                                            vertical: isDesktop ? 16 : 12,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
                                         ),
                                       ),
                                     ],
@@ -373,7 +402,7 @@ class AvatarDetailScreen extends StatelessWidget {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: color.withOpacity(isDarkMode ? 0.2 : 0.1),
+                          color: color.withAlpha(isDarkMode ? 34 : 17),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
@@ -612,12 +641,11 @@ class AvatarDetailScreen extends StatelessWidget {
                                         child: BulkAudioUploader(
                                           avatarColor: avatar.color,
                                           onUpload: (voices) {
-                                            for (final voice in voices) {
-                                              avatarProvider.addVoiceToAvatar(
-                                                avatarId,
-                                                voice,
-                                              );
-                                            }
+                                            avatarProvider
+                                                .addMultipleVoicesToAvatar(
+                                                  avatarId,
+                                                  voices,
+                                                );
                                             Navigator.pop(context);
                                           },
                                         ),

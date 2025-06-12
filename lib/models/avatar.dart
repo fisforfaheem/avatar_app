@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart'; // Used for generating unique IDs
+import 'dart:typed_data'; // Added for Uint8List
 
 // --- Avatar Class --- //
 
@@ -100,6 +101,8 @@ class Voice {
   final String name;
   // The path or URL where the audio file is stored.
   final String audioUrl;
+  // The raw audio data, primarily used for web uploads before saving.
+  final Uint8List? audioBytes;
   // How long the audio recording is.
   final Duration duration;
   // When this voice recording was added/created.
@@ -118,6 +121,7 @@ class Voice {
     String? id, // Optional ID, will be generated if missing.
     required this.name, // A voice MUST have a name.
     required this.audioUrl, // A voice MUST have an audio source.
+    this.audioBytes, // Not required, used for uploads.
     Duration? duration, // Optional duration (defaults to zero).
     DateTime? createdAt, // Optional creation time (defaults to now).
     this.category = 'Uncategorized', // Default category if none provided.
@@ -133,6 +137,7 @@ class Voice {
   Voice copyWith({
     String? name, // New name?
     String? audioUrl, // New audio source?
+    Uint8List? audioBytes, // New audio bytes?
     Duration? duration, // New duration?
     String? category, // New category?
     int? playCount, // New play count?
@@ -143,6 +148,7 @@ class Voice {
       id: id, // Keep the original ID.
       name: name ?? this.name, // Use new if provided, else old.
       audioUrl: audioUrl ?? this.audioUrl,
+      audioBytes: audioBytes ?? this.audioBytes,
       duration: duration ?? this.duration,
       createdAt: createdAt, // Keep original creation time.
       category: category ?? this.category,

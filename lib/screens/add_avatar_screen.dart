@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -17,6 +18,8 @@ class _AddAvatarScreenState extends State<AddAvatarScreen> {
   late IconData _selectedIcon;
   late String _selectedColor;
   File? _selectedImage;
+  Uint8List? _selectedImageBytes;
+  String? _selectedImageName;
   bool _isImageLoading = false;
   final ImagePicker _imagePicker = ImagePicker();
 
@@ -78,17 +81,30 @@ class _AddAvatarScreenState extends State<AddAvatarScreen> {
       );
 
       if (pickedFile != null) {
-        setState(() {
-          _selectedImage = File(pickedFile.path);
-        });
+        if (kIsWeb) {
+          final bytes = await pickedFile.readAsBytes();
+          setState(() {
+            _selectedImageBytes = bytes;
+            _selectedImageName = pickedFile.name;
+            _selectedImage = null; // Clear native file
+          });
+        } else {
+          setState(() {
+            _selectedImage = File(pickedFile.path);
+            _selectedImageBytes = null; // Clear web bytes
+            _selectedImageName = null;
+          });
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error picking image: $e'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error picking image: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } finally {
       setState(() {
         _isImageLoading = false;
@@ -100,6 +116,8 @@ class _AddAvatarScreenState extends State<AddAvatarScreen> {
   void _removeImage() {
     setState(() {
       _selectedImage = null;
+      _selectedImageBytes = null;
+      _selectedImageName = null;
     });
   }
 
@@ -137,6 +155,8 @@ class _AddAvatarScreenState extends State<AddAvatarScreen> {
         'icon': _selectedIcon,
         'color': _selectedColor,
         'imagePath': imagePath,
+        'imageBytes': _selectedImageBytes,
+        'imageName': _selectedImageName,
       });
     }
 
@@ -192,16 +212,25 @@ class _AddAvatarScreenState extends State<AddAvatarScreen> {
                                   color: _getColorFromString(_selectedColor),
                                 ),
                               )
-                              : _selectedImage != null
+                              : (_selectedImage != null ||
+                                  _selectedImageBytes != null)
                               ? Stack(
                                 fit: StackFit.expand,
                                 children: [
                                   ClipRRect(
                                     borderRadius: BorderRadius.circular(14),
-                                    child: Image.file(
-                                      _selectedImage!,
-                                      fit: BoxFit.cover,
-                                    ),
+                                    child:
+                                        kIsWeb && _selectedImageBytes != null
+                                            ? Image.memory(
+                                              _selectedImageBytes!,
+                                              fit: BoxFit.cover,
+                                            )
+                                            : _selectedImage != null
+                                            ? Image.file(
+                                              _selectedImage!,
+                                              fit: BoxFit.cover,
+                                            )
+                                            : const SizedBox(),
                                   ),
                                   Positioned(
                                     top: 5,
@@ -273,42 +302,25 @@ class _AddAvatarScreenState extends State<AddAvatarScreen> {
                   autofocus: true,
                   decoration: InputDecoration(
                     hintText: 'Enter a name for your avatar',
+                    labelText: 'Avatar Name',
                     hintStyle: TextStyle(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
+                    counterStyle: TextStyle(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    filled: true,
+                    fillColor: theme.colorScheme.surfaceContainer,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: theme.colorScheme.outline,
-                        width: 1.5,
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: theme.colorScheme.outline.withOpacity(0.7),
-                        width: 1.5,
-                      ),
+                      borderSide: BorderSide.none,
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide(
-                        color: _getColorFromString(_selectedColor),
+                        color: theme.colorScheme.primary,
                         width: 2,
                       ),
-                    ),
-                    filled: true,
-                    fillColor:
-                        isDarkMode
-                            ? theme.colorScheme.surfaceContainerHighest
-                            : theme.colorScheme.surface,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 16,
-                    ),
-                    prefixIcon: Icon(
-                      Icons.person_outline,
-                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                   style: TextStyle(

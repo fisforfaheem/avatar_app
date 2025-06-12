@@ -239,6 +239,8 @@ class AvatarProvider with ChangeNotifier {
     IconData? icon, // Optional icon
     String? color, // Optional color
     String? imagePath, // Optional custom image path
+    Uint8List? imageBytes, // Optional image data for web
+    String? imageName, // Optional image name for web
   }) async {
     // Basic validation: Need a name!
     if (name.trim().isEmpty) {
@@ -251,16 +253,27 @@ class AvatarProvider with ChangeNotifier {
       _errorMessage = null;
       notifyListeners();
 
-      // Create the new Avatar object using the provided details.
-      // The Avatar constructor handles default icons/colors if not provided.
+      String? finalImagePath = imagePath;
+
+      // If we have image bytes (from web), save them and get a path
+      if (kIsWeb && imageBytes != null && imageName != null) {
+        // On web, we might not get a traditional file path.
+        // We'll store the bytes in the StorageService, which will return a usable "path" or handle it internally.
+        finalImagePath = await _storageService.saveAvatarImage(
+          imageBytes,
+          imageName,
+        );
+      }
+
+      // Create the new Avatar object.
       final newAvatar = Avatar(
-        name: name.trim(), // Trim whitespace
+        name: name.trim(),
         icon: icon,
         color: color,
-        imagePath: imagePath,
+        imagePath: finalImagePath, // Use the potentially new path from storage
       );
 
-      // Add it to our in-memory list.
+      // Add the new avatar to our in-memory list.
       _avatars.add(newAvatar);
 
       // Persist the changes to storage.
@@ -351,7 +364,7 @@ class AvatarProvider with ChangeNotifier {
     } else {
       try {
         // Find the avatar in the list by its ID.
-      _selectedAvatar = _avatars.firstWhere((avatar) => avatar.id == id);
+        _selectedAvatar = _avatars.firstWhere((avatar) => avatar.id == id);
         debugPrint('Avatar selected: ${_selectedAvatar?.name} (ID: $id)');
       } catch (e) {
         // This shouldn't happen if the ID comes from the UI list,
@@ -431,11 +444,15 @@ class AvatarProvider with ChangeNotifier {
           // A safer approach might be Future.wait with error handling,
           // or processing in batches.
           // For simplicity here, we await, but add a small delay.
-          bool deleted = await _storageService.deleteAudioFile(voice.audioUrl);
-          if (deleted)
+          try {
+            await _storageService.deleteAudioFile(voice.audioUrl);
             deletedFiles++;
-          else
+          } catch (deleteError) {
             failedFiles++;
+            debugPrint(
+              'Error deleting audio file ${voice.audioUrl}: $deleteError',
+            );
+          }
           // Small delay to prevent overwhelming disk I/O, especially with many files.
           await Future.delayed(const Duration(milliseconds: 20));
         } catch (e) {
@@ -468,30 +485,88 @@ class AvatarProvider with ChangeNotifier {
 
   // --- Voice Management (Add, Remove, Update, Reorder) ---
 
-  /// Adds a new voice to a specific avatar.
-  Future<void> addVoiceToAvatar(String avatarId, Voice voice) async {
+  /// Adds a new voice to a specific avatar and saves the changes.
+  Future<void> addVoiceToAvatar(String avatarId, Voice newVoice) async {
     final avatarIndex = _avatars.indexWhere((avatar) => avatar.id == avatarId);
     if (avatarIndex != -1) {
-      debugPrint('Adding voice "${voice.name}" to avatar ID: $avatarId');
+      debugPrint('Adding voice "${newVoice.name}" to avatar ID: $avatarId');
+
+      Voice voiceToAdd = newVoice;
+
+      // If the voice has bytes, it means it's a new upload that needs saving.
+      if (newVoice.audioBytes != null) {
+        final fileName =
+            '${DateTime.now().millisecondsSinceEpoch}_${newVoice.name}.mp3'; // Assume mp3 for simplicity
+        final savedPath = await saveAudioFile(fileName, newVoice.audioBytes!);
+
+        if (savedPath != null) {
+          // Create a new Voice object with the final URL and no bytes.
+          voiceToAdd = newVoice.copyWith(audioUrl: savedPath, audioBytes: null);
+        } else {
+          // Handle failed save, maybe by skipping this voice
+          debugPrint('Could not save voice "${newVoice.name}", skipping.');
+          return;
+        }
+      }
+
       final avatar = _avatars[avatarIndex];
       // Create a new list with the existing voices plus the new one.
-      final updatedVoices = [...avatar.voices, voice];
+      final updatedVoices = [...avatar.voices, voiceToAdd];
       // Create an updated avatar object with the new voices list.
       _avatars[avatarIndex] = avatar.copyWith(voices: updatedVoices);
 
-      // Save the changes.
+      // Save the updated avatar list to persistent storage.
       await _saveAvatarsToStorage();
-      notifyListeners(); // Update UI
-      debugPrint('Voice added and avatars saved.');
+
+      notifyListeners(); // Notify UI to rebuild.
     } else {
-      debugPrint('Avatar $avatarId not found to add voice to.');
-      throw Exception('Avatar not found to add voice.');
+      debugPrint('Avatar with ID $avatarId not found.');
     }
   }
 
-  /// Removes a specific voice from an avatar and deletes its audio file.
-  Future<void> removeVoiceFromAvatar(String avatarId, String voiceId) async {
+  /// Adds multiple voices to a specific avatar at once.
+  Future<void> addMultipleVoicesToAvatar(
+    String avatarId,
+    List<Voice> newVoices,
+  ) async {
     final avatarIndex = _avatars.indexWhere((avatar) => avatar.id == avatarId);
+    if (avatarIndex != -1) {
+      debugPrint('Adding ${newVoices.length} voices to avatar ID: $avatarId');
+
+      List<Voice> voicesToAdd = [];
+      for (final voice in newVoices) {
+        if (voice.audioBytes != null) {
+          final fileName =
+              '${DateTime.now().millisecondsSinceEpoch}_${voice.name}.mp3';
+          final savedPath = await saveAudioFile(fileName, voice.audioBytes!);
+          if (savedPath != null) {
+            voicesToAdd.add(
+              voice.copyWith(audioUrl: savedPath, audioBytes: null),
+            );
+          } else {
+            debugPrint('Could not save voice "${voice.name}", skipping.');
+          }
+        } else {
+          // If no bytes, assume it's a pre-existing voice object (less common case).
+          voicesToAdd.add(voice);
+        }
+      }
+
+      if (voicesToAdd.isNotEmpty) {
+        final avatar = _avatars[avatarIndex];
+        final updatedVoices = [...avatar.voices, ...voicesToAdd];
+        _avatars[avatarIndex] = avatar.copyWith(voices: updatedVoices);
+        await _saveAvatarsToStorage();
+        notifyListeners();
+      }
+    } else {
+      debugPrint('Avatar with ID $avatarId not found.');
+    }
+  }
+
+  /// Removes a specific voice from an avatar.
+  Future<void> removeVoiceFromAvatar(String avatarId, String voiceId) async {
+    final avatarIndex = _avatars.indexWhere((a) => a.id == avatarId);
     if (avatarIndex != -1) {
       debugPrint('Removing voice ID: $voiceId from avatar ID: $avatarId');
       final avatar = _avatars[avatarIndex];
@@ -511,7 +586,7 @@ class AvatarProvider with ChangeNotifier {
       // Only proceed if a voice was actually found and removed.
       if (audioUrlToDelete != null) {
         // Update the avatar in the list with the modified voice list.
-      _avatars[avatarIndex] = avatar.copyWith(voices: updatedVoices);
+        _avatars[avatarIndex] = avatar.copyWith(voices: updatedVoices);
 
         // Save the updated avatar list.
         await _saveAvatarsToStorage();
@@ -662,7 +737,7 @@ class AvatarProvider with ChangeNotifier {
 
         // Save changes.
         await _saveAvatarsToStorage();
-      notifyListeners();
+        notifyListeners();
         debugPrint('Voice color updated and saved.');
       } else {
         debugPrint(
@@ -771,17 +846,22 @@ class AvatarProvider with ChangeNotifier {
 
   // --- Utility & Maintenance ---
 
-  /// Saves a raw audio file (bytes) using the `StorageService` and returns the path.
-  /// This is typically used when importing or recording new audio.
-  Future<String> saveAudioFile(String fileName, List<int> bytes) async {
-    debugPrint('Saving audio file: $fileName');
+  /// Saves an audio file using the StorageService.
+  /// Returns the path where the file was saved, or null on failure.
+  Future<String?> saveAudioFile(String fileName, Uint8List fileBytes) async {
     try {
-      final path = await _storageService.saveAudioFile(fileName, bytes);
-      debugPrint('Audio file saved to: $path');
-      return path;
-    } catch (e) {
-      debugPrint('Error saving audio file $fileName: $e');
-      rethrow; // Let the caller handle the error (e.g., show message to user)
+      // For web, the storage service will handle the bytes differently.
+      // For native, it will save them to a file.
+      final savedPath = await _storageService.saveAudioFile(
+        fileName,
+        fileBytes,
+      );
+      return savedPath;
+    } catch (e, stackTrace) {
+      _errorMessage = 'Failed to save audio file: $e';
+      debugPrint('$_errorMessage\nStack trace:\n$stackTrace 😢');
+      notifyListeners();
+      return null;
     }
   }
 
@@ -848,11 +928,8 @@ class AvatarProvider with ChangeNotifier {
       int errorCount = 0;
       for (final audioUrl in audioFilesToDelete) {
         try {
-          final result = await _storageService.deleteAudioFile(audioUrl);
-          if (result)
-            deletedCount++;
-          else
-            errorCount++;
+          await _storageService.deleteAudioFile(audioUrl);
+          deletedCount++;
           // Small delay
           await Future.delayed(const Duration(milliseconds: 20));
         } catch (e) {

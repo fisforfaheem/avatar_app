@@ -11,6 +11,8 @@ import '../providers/audio_routing_provider.dart';
 import '../models/avatar.dart';
 import '../widgets/reorderable_voice_grid.dart';
 import '../widgets/audio_routing_status.dart';
+import '../widgets/future_asset_builder.dart';
+import '../services/web_db_service.dart';
 import 'add_avatar_screen.dart';
 import 'settings_screen.dart';
 import 'dart:io';
@@ -199,11 +201,54 @@ class _HomeScreenState extends State<HomeScreen>
                           children: [
                             avatar.imagePath != null
                                 ? ClipOval(
-                                  child: Image.file(
-                                    File(avatar.imagePath!),
-                                    width: 24,
-                                    height: 24,
-                                    fit: BoxFit.cover,
+                                  child: FutureAssetBuilder(
+                                    assetKey: avatar.imagePath!,
+                                    loader: (key) async {
+                                      if (key.startsWith('indexeddb://')) {
+                                        final dbKey = key.substring(
+                                          'indexeddb://'.length,
+                                        );
+                                        return WebDbService.instance.loadAsset(
+                                          dbKey,
+                                        );
+                                      } else {
+                                        return File(key).readAsBytes();
+                                      }
+                                    },
+                                    loadingWidget: Container(
+                                      width: 24,
+                                      height: 24,
+                                      color: avatarColor.withAlpha(51),
+                                      child: const Center(
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.0,
+                                        ),
+                                      ),
+                                    ),
+                                    errorWidget: Container(
+                                      width: 24,
+                                      height: 24,
+                                      color: Colors.grey.shade300,
+                                      child: Icon(
+                                        Icons.broken_image,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                    builder: (context, data) {
+                                      if (data == null) {
+                                        return Icon(
+                                          avatar.icon,
+                                          size: 24,
+                                          color: avatarColor,
+                                        );
+                                      }
+                                      return Image.memory(
+                                        data,
+                                        fit: BoxFit.cover,
+                                        width: 24,
+                                        height: 24,
+                                      );
+                                    },
                                   ),
                                 )
                                 : Icon(
@@ -248,9 +293,9 @@ class _HomeScreenState extends State<HomeScreen>
               hoverColor: theme.colorScheme.error,
               size: isMobile ? 20 : 22,
               useContainer: true,
-              containerColor: theme.colorScheme.errorContainer.withOpacity(0.2),
-              containerHoverColor: theme.colorScheme.errorContainer.withOpacity(
-                0.3,
+              containerColor: theme.colorScheme.errorContainer.withAlpha(51),
+              containerHoverColor: theme.colorScheme.errorContainer.withAlpha(
+                80,
               ),
             ),
           // Theme toggle button
@@ -305,9 +350,10 @@ class _HomeScreenState extends State<HomeScreen>
                 hoverColor: theme.colorScheme.error,
                 size: isMobile ? 18 : 20,
                 useContainer: true,
-                containerColor: Colors.black.withOpacity(0.08),
-                containerHoverColor: theme.colorScheme.errorContainer
-                    .withOpacity(0.2),
+                containerColor: Colors.black.withAlpha(14),
+                containerHoverColor: theme.colorScheme.errorContainer.withAlpha(
+                  80,
+                ),
               ),
             ),
         ];
@@ -476,20 +522,18 @@ class _HomeScreenState extends State<HomeScreen>
                                   ? Theme.of(context)
                                       .colorScheme
                                       .surfaceContainerHighest
-                                      .withOpacity(isHovering ? 0.8 : 0.6)
-                                  : avatarColor.withOpacity(
-                                    isHovering ? 0.12 : 0.08,
-                                  ),
+                                      .withAlpha(isHovering ? 128 : 192)
+                                  : avatarColor.withAlpha(isHovering ? 19 : 30),
                           border: Border.all(
                             color:
                                 isDarkMode
                                     ? isHovering
                                         ? Theme.of(
                                           context,
-                                        ).colorScheme.primary.withOpacity(0.5)
+                                        ).colorScheme.primary.withAlpha(80)
                                         : Theme.of(context).colorScheme.outline
-                                    : avatarColor.withOpacity(
-                                      isHovering ? 0.4 : 0.2,
+                                    : avatarColor.withAlpha(
+                                      isHovering ? 76 : 51,
                                     ),
                             width: isHovering ? 1.5 : 1.0,
                           ),
@@ -504,21 +548,65 @@ class _HomeScreenState extends State<HomeScreen>
                               curve: Curves.easeOutCubic,
                               padding: EdgeInsets.all(isMobile ? 6 : 8),
                               decoration: BoxDecoration(
-                                color: avatarColor.withOpacity(
+                                color: avatarColor.withAlpha(
                                   isDarkMode
-                                      ? (isHovering ? 0.3 : 0.2)
-                                      : (isHovering ? 0.2 : 0.15),
+                                      ? (isHovering ? 48 : 38)
+                                      : (isHovering ? 38 : 30),
                                 ),
                                 shape: BoxShape.circle,
                               ),
                               child:
                                   avatar.imagePath != null
                                       ? ClipOval(
-                                        child: Image.file(
-                                          File(avatar.imagePath!),
-                                          fit: BoxFit.cover,
-                                          width: iconSize,
-                                          height: iconSize,
+                                        child: FutureAssetBuilder(
+                                          assetKey: avatar.imagePath!,
+                                          loader: (key) async {
+                                            if (key.startsWith(
+                                              'indexeddb://',
+                                            )) {
+                                              final dbKey = key.substring(
+                                                'indexeddb://'.length,
+                                              );
+                                              return WebDbService.instance
+                                                  .loadAsset(dbKey);
+                                            } else {
+                                              return File(key).readAsBytes();
+                                            }
+                                          },
+                                          loadingWidget: Container(
+                                            width: iconSize,
+                                            height: iconSize,
+                                            color: avatarColor.withAlpha(20),
+                                            child: const Center(
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2.0,
+                                              ),
+                                            ),
+                                          ),
+                                          errorWidget: Container(
+                                            width: iconSize,
+                                            height: iconSize,
+                                            color: Colors.grey.shade300,
+                                            child: Icon(
+                                              Icons.broken_image,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                          ),
+                                          builder: (context, data) {
+                                            if (data == null) {
+                                              return Icon(
+                                                avatar.icon,
+                                                size: iconSize,
+                                                color: avatarColor,
+                                              );
+                                            }
+                                            return Image.memory(
+                                              data,
+                                              fit: BoxFit.cover,
+                                              width: iconSize,
+                                              height: iconSize,
+                                            );
+                                          },
                                         ),
                                       )
                                       : Icon(
@@ -585,7 +673,7 @@ class _HomeScreenState extends State<HomeScreen>
                                           : Theme.of(context)
                                               .colorScheme
                                               .onSurface
-                                              .withOpacity(0.5),
+                                              .withAlpha(128),
                                 ),
                               ),
                             ),
@@ -609,8 +697,8 @@ class _HomeScreenState extends State<HomeScreen>
                                     vertical: isMobile ? 4 : 6,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: avatarColor.withOpacity(
-                                      isDarkMode ? 0.15 : 0.12,
+                                    color: avatarColor.withAlpha(
+                                      isDarkMode ? 30 : 20,
                                     ),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
@@ -659,7 +747,7 @@ class _HomeScreenState extends State<HomeScreen>
                                     size: isMobile ? 22 : 26,
                                     color: Theme.of(
                                       context,
-                                    ).colorScheme.onSurface.withOpacity(0.5),
+                                    ).colorScheme.onSurface.withAlpha(128),
                                   ),
                                 ),
                               ),
@@ -687,7 +775,7 @@ class _HomeScreenState extends State<HomeScreen>
                             fontSize: 13,
                             color: Theme.of(
                               context,
-                            ).colorScheme.onSurface.withOpacity(0.6),
+                            ).colorScheme.onSurface.withAlpha(128),
                             fontStyle: FontStyle.italic,
                           ),
                         ),
@@ -744,7 +832,20 @@ class _HomeScreenState extends State<HomeScreen>
         }
 
         // Play the selected voice
-        await _audioPlayer.play(DeviceFileSource(voice.audioUrl));
+        if (voice.audioUrl.startsWith('indexeddb://')) {
+          final key = voice.audioUrl.substring('indexeddb://'.length);
+          final bytes = await WebDbService.instance.loadAsset(key);
+          if (bytes != null) {
+            await _audioPlayer.play(BytesSource(bytes));
+          } else {
+            throw Exception('Failed to load audio from DB');
+          }
+        } else if (kIsWeb) {
+          // Fallback for any other type of URL on web
+          await _audioPlayer.play(UrlSource(voice.audioUrl));
+        } else {
+          await _audioPlayer.play(DeviceFileSource(voice.audioUrl));
+        }
         setState(() {
           _currentlyPlayingVoiceId = voice.id;
         });
@@ -765,12 +866,14 @@ class _HomeScreenState extends State<HomeScreen>
       }
     } catch (e) {
       // Show error message if playback fails
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error playing audio: ${e.toString()}'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error playing audio: ${e.toString()}'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -818,11 +921,11 @@ class _HomeScreenState extends State<HomeScreen>
                 child: Container(
                   padding: const EdgeInsets.all(30),
                   decoration: BoxDecoration(
-                    color: primaryColor.withOpacity(0.15),
+                    color: primaryColor.withAlpha(15),
                     borderRadius: BorderRadius.circular(100),
                     boxShadow: [
                       BoxShadow(
-                        color: primaryColor.withOpacity(0.2),
+                        color: primaryColor.withAlpha(32),
                         blurRadius: 20,
                         spreadRadius: 2,
                       ),
@@ -865,7 +968,7 @@ class _HomeScreenState extends State<HomeScreen>
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
-                    color: theme.colorScheme.onSurface.withOpacity(0.7),
+                    color: theme.colorScheme.onSurface.withAlpha(128),
                     height: 1.4,
                   ),
                 ),
@@ -902,7 +1005,7 @@ class _HomeScreenState extends State<HomeScreen>
                         borderRadius: BorderRadius.circular(16),
                       ),
                       elevation: 8,
-                      shadowColor: primaryColor.withOpacity(0.5),
+                      shadowColor: primaryColor.withAlpha(128),
                     ),
                   ),
                 ),
@@ -915,31 +1018,46 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _showAddAvatarDialog(BuildContext context) async {
-    // Navigate to a dedicated screen instead of showing a dialog
-    final result = await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (context) => const AddAvatarScreen()));
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (BuildContext context) => const AddAvatarScreen(),
+    );
 
-    if (result != null && result['name'].isNotEmpty && context.mounted) {
+    if (result == null || !context.mounted) return;
+
+    final name = result['name'] as String;
+    final icon = result['icon'] as IconData;
+    final color = result['color'] as String;
+    final imagePath = result['imagePath'] as String?;
+    final imageBytes = result['imageBytes'] as Uint8List?;
+    final imageName = result['imageName'] as String?;
+
+    try {
       final avatarProvider = Provider.of<AvatarProvider>(
         context,
         listen: false,
       );
       await avatarProvider.addAvatar(
-        result['name'],
-        icon: result['icon'],
-        color: result['color'],
-        imagePath: result['imagePath'],
+        name,
+        icon: icon,
+        color: color,
+        imagePath: imagePath,
+        imageBytes: imageBytes,
+        imageName: imageName,
       );
 
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Avatar "${result['name']}" has been created successfully.',
-          ),
+          content: Text('Avatar "$name" created successfully.'),
           behavior: SnackBarBehavior.floating,
         ),
       );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error creating avatar: $e')));
     }
   }
 
@@ -982,12 +1100,14 @@ class _HomeScreenState extends State<HomeScreen>
       }
     } catch (e) {
       // Show error message if stopping fails
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error stopping audio: ${e.toString()}'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error stopping audio: ${e.toString()}'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -1154,7 +1274,7 @@ class _HomeScreenState extends State<HomeScreen>
                                         color: theme
                                             .colorScheme
                                             .onSurfaceVariant
-                                            .withOpacity(0.5),
+                                            .withAlpha(128),
                                       ),
                                       const SizedBox(height: 16),
                                       Text(
@@ -1174,7 +1294,7 @@ class _HomeScreenState extends State<HomeScreen>
                                           color: theme
                                               .colorScheme
                                               .onSurfaceVariant
-                                              .withOpacity(0.7),
+                                              .withAlpha(192),
                                           fontSize: 14,
                                         ),
                                       ),
@@ -1219,8 +1339,8 @@ class _HomeScreenState extends State<HomeScreen>
                                               vertical: 1,
                                             ),
                                             decoration: BoxDecoration(
-                                              color: avatarColor.withOpacity(
-                                                isDarkMode ? 0.2 : 0.1,
+                                              color: avatarColor.withAlpha(
+                                                isDarkMode ? 32 : 20,
                                               ),
                                               borderRadius:
                                                   BorderRadius.circular(10),
@@ -1236,10 +1356,9 @@ class _HomeScreenState extends State<HomeScreen>
                                         ],
                                       ),
                                       leading: CircleAvatar(
-                                        backgroundColor: avatarColor
-                                            .withOpacity(
-                                              isDarkMode ? 0.3 : 0.2,
-                                            ),
+                                        backgroundColor: avatarColor.withAlpha(
+                                          isDarkMode ? 48 : 32,
+                                        ),
                                         radius: 16,
                                         child: Icon(
                                           avatar.icon,
@@ -1383,9 +1502,7 @@ class _HomeScreenState extends State<HomeScreen>
                 'Please wait while we load your voice collection',
                 style: TextStyle(
                   fontSize: 14,
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withOpacity(0.7),
+                  color: Theme.of(context).colorScheme.onSurface.withAlpha(128),
                 ),
               ),
             ],
@@ -1442,7 +1559,7 @@ class _HomeScreenState extends State<HomeScreen>
                     fontSize: 14,
                     color: Theme.of(
                       context,
-                    ).colorScheme.onSurface.withOpacity(0.7),
+                    ).colorScheme.onSurface.withAlpha(128),
                   ),
                 ),
               ),
@@ -1617,7 +1734,7 @@ class _HomeScreenState extends State<HomeScreen>
             duration: const Duration(milliseconds: 400),
             curve: Curves.easeOut,
             child: Container(
-              color: theme.colorScheme.surface.withOpacity(0.7),
+              color: theme.colorScheme.surface.withAlpha(128),
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1692,10 +1809,8 @@ class _ShortcutRowState extends State<_ShortcutRow> {
           color:
               _isHovering
                   ? (widget.isDarkMode
-                      ? theme.colorScheme.surfaceContainerHighest.withOpacity(
-                        0.7,
-                      )
-                      : theme.colorScheme.primaryContainer.withOpacity(0.1))
+                      ? theme.colorScheme.surfaceContainerHighest.withAlpha(128)
+                      : theme.colorScheme.primaryContainer.withAlpha(20))
                   : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
         ),
@@ -1709,17 +1824,17 @@ class _ShortcutRowState extends State<_ShortcutRow> {
                     widget.isDarkMode
                         ? theme.colorScheme.surfaceContainerHighest
                         : _isHovering
-                        ? theme.colorScheme.primaryContainer.withOpacity(0.3)
+                        ? theme.colorScheme.primaryContainer.withAlpha(32)
                         : Colors.grey.shade200,
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(
                   color:
                       widget.isDarkMode
                           ? _isHovering
-                              ? theme.colorScheme.primary.withOpacity(0.5)
+                              ? theme.colorScheme.primary.withAlpha(80)
                               : theme.colorScheme.outline
                           : _isHovering
-                          ? theme.colorScheme.primary.withOpacity(0.3)
+                          ? theme.colorScheme.primary.withAlpha(32)
                           : Colors.grey.shade300,
                   width: _isHovering ? 1.5 : 1.0,
                 ),
@@ -1727,7 +1842,7 @@ class _ShortcutRowState extends State<_ShortcutRow> {
                     _isHovering
                         ? [
                           BoxShadow(
-                            color: theme.colorScheme.primary.withOpacity(0.1),
+                            color: theme.colorScheme.primary.withAlpha(20),
                             blurRadius: 4,
                             offset: const Offset(0, 2),
                           ),
@@ -1950,7 +2065,7 @@ class _HoverIconButtonState extends State<_HoverIconButton> {
                     decoration: BoxDecoration(
                       color:
                           _isHovering
-                              ? widget.hoverColor.withOpacity(0.1)
+                              ? widget.hoverColor.withAlpha(20)
                               : Colors.transparent,
                       shape: BoxShape.circle,
                     ),
@@ -2003,7 +2118,7 @@ class _HoverTextButtonState extends State<_HoverTextButton> {
           foregroundColor: widget.primaryColor,
           backgroundColor:
               _isHovering
-                  ? widget.primaryColor.withOpacity(0.1)
+                  ? widget.primaryColor.withAlpha(20)
                   : Colors.transparent,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -2058,7 +2173,7 @@ class _HoverListTileState extends State<_HoverListTile> {
               _isHovering
                   ? (isDarkMode
                       ? theme.colorScheme.surfaceContainerHighest
-                      : theme.colorScheme.primaryContainer.withOpacity(0.1))
+                      : theme.colorScheme.primaryContainer.withAlpha(20))
                   : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
@@ -2170,9 +2285,7 @@ class _AnimatedIconButtonState extends State<_AnimatedIconButton> {
                           size: widget.size,
                           color:
                               widget.isDisabled
-                                  ? theme.colorScheme.onSurface.withOpacity(
-                                    0.38,
-                                  )
+                                  ? theme.colorScheme.onSurface.withAlpha(64)
                                   : Color.lerp(
                                     widget.color,
                                     widget.hoverColor,
@@ -2185,7 +2298,7 @@ class _AnimatedIconButtonState extends State<_AnimatedIconButton> {
                         size: widget.size,
                         color:
                             widget.isDisabled
-                                ? theme.colorScheme.onSurface.withOpacity(0.38)
+                                ? theme.colorScheme.onSurface.withAlpha(64)
                                 : Color.lerp(
                                   widget.color,
                                   widget.hoverColor,
@@ -2202,19 +2315,14 @@ class _AnimatedIconButtonState extends State<_AnimatedIconButton> {
                       color:
                           widget.isDisabled
                               ? (widget.containerColor ?? Colors.transparent)
-                                  .withOpacity(0.5)
-                              : Color.lerp(
-                                widget.containerColor ?? Colors.transparent,
-                                widget.containerHoverColor ??
-                                    widget.hoverColor.withOpacity(0.1),
-                                value,
-                              ),
+                                  .withAlpha(128)
+                              : widget.containerColor,
                       shape: BoxShape.circle,
                       boxShadow:
                           _isHovering && !widget.isDisabled
                               ? [
                                 BoxShadow(
-                                  color: widget.hoverColor.withOpacity(0.2),
+                                  color: widget.hoverColor.withAlpha(20),
                                   blurRadius: 4,
                                   spreadRadius: 1,
                                   offset: const Offset(0, 2),
@@ -2233,7 +2341,7 @@ class _AnimatedIconButtonState extends State<_AnimatedIconButton> {
                     decoration: BoxDecoration(
                       color:
                           _isHovering && !widget.isDisabled
-                              ? widget.hoverColor.withOpacity(0.1)
+                              ? widget.hoverColor.withAlpha(20)
                               : Colors.transparent,
                       shape: BoxShape.circle,
                     ),
@@ -2324,7 +2432,7 @@ class _AnimatedPopupMenuButtonState<T>
                 decoration: BoxDecoration(
                   color:
                       _isHovering && widget.enabled
-                          ? widget.hoverColor.withOpacity(0.1)
+                          ? widget.hoverColor.withAlpha(20)
                           : Colors.transparent,
                   shape: BoxShape.circle,
                 ),
@@ -2335,7 +2443,7 @@ class _AnimatedPopupMenuButtonState<T>
                   color:
                       widget.enabled
                           ? Color.lerp(widget.color, widget.hoverColor, value)
-                          : theme.colorScheme.onSurface.withOpacity(0.38),
+                          : theme.colorScheme.onSurface.withAlpha(64),
                 ),
               ),
             );

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -53,6 +54,7 @@ class _BulkAudioUploaderState extends State<BulkAudioUploader> {
   }
 
   void _cleanupTempFiles() {
+    if (kIsWeb) return;
     for (final tempPath in _tempFilePaths) {
       try {
         final file = File(tempPath);
@@ -103,11 +105,12 @@ class _BulkAudioUploaderState extends State<BulkAudioUploader> {
         _isProcessing = true;
       });
 
-      // Create temporary directory
-      final tempDir = await getTemporaryDirectory();
+      // Create temporary directory for native platforms
+      final tempDir = kIsWeb ? null : await getTemporaryDirectory();
 
       // Process each file
       for (final file in result.files) {
+        if (_isDisposed) return;
         // Verify file size (limit to 10MB)
         if (file.size > 10 * 1024 * 1024) {
           _safeSetState(() {
@@ -116,52 +119,78 @@ class _BulkAudioUploaderState extends State<BulkAudioUploader> {
           continue; // Skip this file
         }
 
-        // Create a temporary file
-        final tempFile = File(
-          path.join(
-            tempDir.path,
-            'temp_${DateTime.now().millisecondsSinceEpoch}_${file.name}',
-          ),
-        );
+        Uint8List? fileBytes;
+        String? tempFilePath;
 
-        // Write the file data
-        if (file.bytes != null) {
-          await tempFile.writeAsBytes(file.bytes!);
-        } else if (file.path != null) {
-          await File(file.path!).copy(tempFile.path);
-        } else {
-          _safeSetState(() {
-            _processedCount++;
-          });
-          continue; // Skip this file
-        }
-
-        if (_isDisposed) {
-          // Clean up if widget was disposed during async operation
-          try {
-            if (tempFile.existsSync()) {
-              tempFile.deleteSync();
-            }
-          } catch (e) {
-            debugPrint('Error cleaning up temp file: $e');
+        if (kIsWeb) {
+          fileBytes = file.bytes;
+          if (fileBytes == null) {
+            _safeSetState(() => _processedCount++);
+            continue;
           }
-          return;
-        }
+        } else {
+          // Create a temporary file on native
+          if (tempDir == null) continue; // Should not happen on native
+          final tempFile = File(
+            path.join(
+              tempDir.path,
+              'temp_${DateTime.now().millisecondsSinceEpoch}_${file.name}',
+            ),
+          );
 
-        _tempFilePaths.add(tempFile.path);
+          // Write the file data
+          if (file.bytes != null) {
+            await tempFile.writeAsBytes(file.bytes!);
+          } else if (file.path != null) {
+            await File(file.path!).copy(tempFile.path);
+          } else {
+            _safeSetState(() => _processedCount++);
+            continue; // Skip if no data
+          }
+          fileBytes = await tempFile.readAsBytes();
+
+          if (_isDisposed) {
+            try {
+              if (tempFile.existsSync()) tempFile.deleteSync();
+            } catch (e) {
+              debugPrint('Error cleaning up temp file: $e');
+            }
+            return;
+          }
+          tempFilePath = tempFile.path;
+          _tempFilePaths.add(tempFilePath);
+        }
 
         // Get audio duration
         try {
-          if (_audioPlayer == null) {
-            _initAudioPlayer();
+          if (_audioPlayer == null) _initAudioPlayer();
+          await _audioPlayer?.stop();
+
+          if (kIsWeb) {
+            await _audioPlayer?.setSource(BytesSource(fileBytes));
+          } else {
+            await _audioPlayer?.setSource(DeviceFileSource(tempFilePath!));
           }
 
-          await _audioPlayer?.stop();
-          await _audioPlayer?.setSource(DeviceFileSource(tempFile.path));
+          // A more robust way to get duration
+          final completer = Completer<Duration>();
+          final sub = _audioPlayer?.onDurationChanged.listen((d) {
+            if (d > Duration.zero && !completer.isCompleted) {
+              completer.complete(d);
+            }
+          });
 
-          // Wait for duration to be set
-          await Future.delayed(const Duration(milliseconds: 500));
-          final duration = await _audioPlayer?.getDuration() ?? Duration.zero;
+          // Wait for duration with a timeout
+          final duration = await completer.future.timeout(
+            const Duration(seconds: 2),
+            onTimeout:
+                () =>
+                    _audioPlayer?.getDuration().then(
+                      (d) => d ?? Duration.zero,
+                    ) ??
+                    Future.value(Duration.zero),
+          );
+          sub?.cancel();
 
           if (_isDisposed) return;
 
@@ -185,7 +214,7 @@ class _BulkAudioUploaderState extends State<BulkAudioUploader> {
             _selectedFiles.add(file);
             _audioDetails.add({
               'file': file,
-              'tempPath': tempFile.path,
+              'bytes': fileBytes, // Pass bytes for both platforms
               'duration': duration,
               'name': _generateNameFromFilename(file.name),
             });
@@ -234,7 +263,8 @@ class _BulkAudioUploaderState extends State<BulkAudioUploader> {
   Future<void> _handleSubmit() async {
     if (_audioDetails.isEmpty) {
       _safeSetState(() {
-        _errorMessage = 'Please select at least one audio file';
+        _errorMessage = 'Please select at least one valid audio file';
+        return;
       });
       return;
     }
@@ -245,71 +275,36 @@ class _BulkAudioUploaderState extends State<BulkAudioUploader> {
     });
 
     try {
-      // Get the app's documents directory
-      final appDir = await getApplicationDocumentsDirectory();
+      List<Voice> voicesToUpload = [];
+      for (final detail in _audioDetails) {
+        final duration = detail['duration'] as Duration;
+        final name = detail['name'] as String;
+        final bytes = detail['bytes'] as Uint8List;
 
-      // Create a voices subdirectory if it doesn't exist
-      final voicesDir = Directory(path.join(appDir.path, 'voices'));
-      if (!await voicesDir.exists()) {
-        await voicesDir.create(recursive: true);
-      }
-
-      List<Voice> voices = [];
-
-      // Process each audio file
-      for (final audioDetail in _audioDetails) {
-        final tempPath = audioDetail['tempPath'] as String;
-        final duration = audioDetail['duration'] as Duration;
-        final name = audioDetail['name'] as String;
-        final file = audioDetail['file'] as PlatformFile;
-
-        // Generate unique filename
-        final fileName =
-            '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
-        final savedFile = File(path.join(voicesDir.path, fileName));
-
-        // Copy the file from temp location
-        await File(tempPath).copy(savedFile.path);
-
-        // Create Voice object
         final voice = Voice(
           name: name,
-          audioUrl: savedFile.path,
+          audioUrl:
+              'placeholder', // Will be replaced by the provider after saving
           duration: duration,
+          audioBytes: bytes, // Pass the bytes to be saved
         );
-
-        voices.add(voice);
+        voicesToUpload.add(voice);
       }
 
-      if (!_isDisposed && mounted) {
-        widget.onUpload(voices);
+      // Pass the list of voices to the callback.
+      widget.onUpload(voicesToUpload);
 
-        // Reset form
-        _safeSetState(() {
-          _selectedFiles = [];
-          _audioDetails = [];
-          _errorMessage = null;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${voices.length} voice samples have been added successfully',
-            ),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      _safeSetState(() {
+        _isUploading = false;
+        _selectedFiles.clear();
+        _audioDetails.clear();
+        _cleanupTempFiles();
+      });
     } catch (e) {
-      debugPrint('Error saving files: $e');
-      if (!_isDisposed && mounted) {
+      debugPrint('Error during bulk upload submission: $e');
+      if (!_isDisposed) {
         _safeSetState(() {
-          _errorMessage = 'Error saving files. Please try again.';
-        });
-      }
-    } finally {
-      if (!_isDisposed && mounted) {
-        _safeSetState(() {
+          _errorMessage = 'Error preparing files for upload. Please try again.';
           _isUploading = false;
         });
       }

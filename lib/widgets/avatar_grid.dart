@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import '../models/avatar.dart';
-import 'package:provider/provider.dart';
-import '../providers/avatar_provider.dart';
-import '../screens/edit_avatar_screen.dart';
 
 class AvatarGrid extends StatefulWidget {
   final List<Avatar> avatars;

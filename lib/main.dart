@@ -98,12 +98,15 @@ Future<void> _initializePlugins() async {
       }
 
       // We need a specific folder to store our audio files. Let's make sure it exists.
-      final audioDir = Directory('${appDocDir.path}/audio_files');
-      if (!await audioDir.exists()) {
-        // If the folder isn't there, create it!
-        await audioDir.create(
-          recursive: true,
-        ); // `recursive: true` creates parent dirs if needed.
+      // On web, we don't use the file system for this, so we skip it.
+      if (!kIsWeb) {
+        final audioDir = Directory('${appDocDir.path}/audio_files');
+        if (!await audioDir.exists()) {
+          // If the folder isn't there, create it!
+          await audioDir.create(
+            recursive: true,
+          ); // `recursive: true` creates parent dirs if needed.
+        }
       }
     }
 

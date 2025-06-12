@@ -20,6 +20,7 @@ dependencies:
   image_picker: ^1.1.2
   window_manager: ^0.3.4
   msix: ^3.16.8
+  idb_shim: ^2.6.6+2
 
 dev_dependencies:
   flutter_test:

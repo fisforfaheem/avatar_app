@@ -33,7 +33,7 @@ class AppTheme {
     onSurfaceVariant:
         Colors.black54, // Less prominent text/icons (placeholders, subtitles)
     outline: Colors.black12, // Borders, dividers (very subtle)
-    shadow: Colors.black.withOpacity(0.1), // Subtle shadow for elevation
+    shadow: Colors.black.withAlpha(30), // Subtle shadow for elevation
     inverseSurface: const Color(
       0xFF1C1C1E,
     ), // Roughly the dark mode surface color (for Snackbars, etc.)
@@ -58,16 +58,16 @@ class AppTheme {
     surface: const Color(
       0xFF1c1c1e,
     ), // Primary dark background (Cards, etc.) - Changed from 2C2C2E for deeper black
-    onSurface: Colors.white.withOpacity(
-      0.9,
+    onSurface: Colors.white.withAlpha(
+      236,
     ), // Primary text/icons on dark background (slightly off-white)
     surfaceContainerHighest: const Color(
       0xFF2c2c2e,
     ), // Secondary dark background (e.g., text fields) - Changed from 3A3A3C
     onSurfaceVariant: Colors.white70, // Less prominent text/icons
     outline: Colors.white24, // Borders, dividers
-    shadow: Colors.black.withOpacity(
-      0.4,
+    shadow: Colors.black.withAlpha(
+      128,
     ), // More pronounced shadow for dark mode depth
     inverseSurface: Colors.white, // Light backgrounds (in dark theme)
     onInverseSurface: Colors.black,
@@ -244,7 +244,7 @@ class AppTheme {
     listTileTheme: ListTileThemeData(
       tileColor:
           Colors.transparent, // Transparent tiles, rely on card background
-      selectedTileColor: _lightColorScheme.primary.withOpacity(0.1),
+      selectedTileColor: _lightColorScheme.primary.withAlpha(15),
       iconColor: _lightColorScheme.onSurfaceVariant,
       textColor: _lightColorScheme.onSurface,
       selectedColor: _lightColorScheme.primary,
@@ -282,8 +282,8 @@ class AppTheme {
         if (states.contains(WidgetState.selected)) {
           return _lightColorScheme.onPrimary; // White thumb when on
         }
-        return _lightColorScheme.onSurface.withOpacity(
-          0.6,
+        return _lightColorScheme.onSurface.withAlpha(
+          153,
         ); // Grayish thumb when off
       }),
       trackColor: WidgetStateProperty.resolveWith((states) {
@@ -369,7 +369,7 @@ class AppTheme {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         elevation: 2, // Subtle elevation
-        shadowColor: Colors.black.withOpacity(0.3),
+        shadowColor: Colors.black.withAlpha(64),
         textStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
       ),
     ),
@@ -482,8 +482,8 @@ class AppTheme {
     ),
     listTileTheme: ListTileThemeData(
       tileColor: Colors.transparent, // Transparent, rely on card background
-      selectedTileColor: _darkColorScheme.primary.withOpacity(
-        0.2,
+      selectedTileColor: _darkColorScheme.primary.withAlpha(
+        30,
       ), // More prominent selection
       iconColor: _darkColorScheme.onSurfaceVariant,
       textColor: _darkColorScheme.onSurface,
@@ -492,7 +492,7 @@ class AppTheme {
     popupMenuTheme: PopupMenuThemeData(
       color: _darkColorScheme.surfaceContainerHighest, // Use secondary dark bg
       elevation: 8,
-      shadowColor: Colors.black.withOpacity(0.5),
+      shadowColor: Colors.black.withAlpha(128),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
         side: BorderSide(color: _darkColorScheme.outline, width: 0.5),
@@ -501,7 +501,7 @@ class AppTheme {
     dialogTheme: DialogTheme(
       backgroundColor: _darkColorScheme.surface, // Dark gray background
       elevation: 16,
-      shadowColor: Colors.black.withOpacity(0.6),
+      shadowColor: Colors.black.withAlpha(192),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14), // Match light theme
         side: BorderSide(color: _darkColorScheme.outline, width: 0.5),
@@ -520,16 +520,16 @@ class AppTheme {
         if (states.contains(WidgetState.selected)) {
           return _darkColorScheme.onPrimary; // White thumb when on
         }
-        return _darkColorScheme.onSurface.withOpacity(
-          0.6,
+        return _darkColorScheme.onSurface.withAlpha(
+          153,
         ); // Grayish thumb when off
       }),
       trackColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
           return _darkColorScheme.primary; // Blue track when on
         }
-        return _darkColorScheme.outline.withOpacity(
-          0.5,
+        return _darkColorScheme.outline.withAlpha(
+          128,
         ); // Darker outline track when off
       }),
       trackOutlineColor: WidgetStateProperty.all(

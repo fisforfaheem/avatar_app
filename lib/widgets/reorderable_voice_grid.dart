@@ -5,7 +5,6 @@ import 'dart:math';
 import '../models/avatar.dart';
 import 'package:provider/provider.dart';
 import '../providers/avatar_provider.dart';
-import '../screens/home_screen.dart';
 
 /// A grid of voice items that can be reordered by dragging
 class ReorderableVoiceGrid extends StatefulWidget {

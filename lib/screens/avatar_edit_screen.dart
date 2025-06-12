@@ -80,6 +80,7 @@ class _AvatarEditScreenState extends State<AvatarEditScreen> {
     void updateAvatar() async {
       if (_nameController.text.trim().isEmpty) {
         // Show error message
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -97,19 +98,22 @@ class _AvatarEditScreenState extends State<AvatarEditScreen> {
       }
 
       // Update the avatar
+      if (!mounted) return;
       avatarProvider.updateAvatar(
         widget.avatar.id,
         name: _nameController.text.trim(),
-        icon: _selectedIcon,
         color: _selectedColor,
+        icon: _selectedIcon,
         imagePath: _selectedImage?.path,
       );
 
+      if (!mounted) return;
       Navigator.of(context).pop();
     }
 
     // Function to handle cancellation
     void cancelEditing() {
+      if (!mounted) return;
       Navigator.of(context).pop();
     }
 
@@ -486,6 +490,7 @@ class _AvatarEditScreenState extends State<AvatarEditScreen> {
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   onPressed: () {
+                    if (!mounted) return;
                     showDialog(
                       context: context,
                       builder:
@@ -501,6 +506,7 @@ class _AvatarEditScreenState extends State<AvatarEditScreen> {
                               ),
                               FilledButton(
                                 onPressed: () {
+                                  if (!mounted) return;
                                   avatarProvider.removeAvatar(widget.avatar.id);
                                   Navigator.of(context).pop(); // Close dialog
                                   Navigator.of(
@@ -685,6 +691,7 @@ class _AvatarEditScreenState extends State<AvatarEditScreen> {
             color: Colors.transparent,
             child: InkWell(
               onTap: () {
+                if (!mounted) return;
                 setState(() {
                   _selectedIcon = icon;
                 });
@@ -778,6 +785,7 @@ class _AvatarEditScreenState extends State<AvatarEditScreen> {
 
                   return InkWell(
                     onTap: () {
+                      if (!mounted) return;
                       setState(() {
                         _selectedColor = color;
                       });
@@ -827,6 +835,7 @@ class _AvatarEditScreenState extends State<AvatarEditScreen> {
                     padding: const EdgeInsets.only(right: 16),
                     child: InkWell(
                       onTap: () {
+                        if (!mounted) return;
                         setState(() {
                           _selectedColor = color;
                         });
@@ -872,6 +881,7 @@ class _AvatarEditScreenState extends State<AvatarEditScreen> {
 
   // Pick image from gallery
   Future<void> _pickImage() async {
+    if (!mounted) return;
     setState(() {
       _isImageLoading = true;
     });
@@ -885,11 +895,13 @@ class _AvatarEditScreenState extends State<AvatarEditScreen> {
       );
 
       if (pickedFile != null) {
+        if (!mounted) return;
         setState(() {
           _selectedImage = File(pickedFile.path);
         });
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error picking image: $e'),
@@ -897,6 +909,7 @@ class _AvatarEditScreenState extends State<AvatarEditScreen> {
         ),
       );
     } finally {
+      if (!mounted) return;
       setState(() {
         _isImageLoading = false;
       });
@@ -905,6 +918,7 @@ class _AvatarEditScreenState extends State<AvatarEditScreen> {
 
   // Remove the selected image
   void _removeImage() {
+    if (!mounted) return;
     setState(() {
       _selectedImage = null;
     });

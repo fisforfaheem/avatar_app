@@ -1,10 +1,13 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/avatar.dart';
+import 'web_db_service.dart';
+import 'package:uuid/uuid.dart';
 
 /// Handles the nitty-gritty of saving and loading avatar data.
 ///
@@ -24,6 +27,10 @@ class StorageService {
       'last_storage_sync'; // Key for timestamp of last save
   static const String _audioDirName =
       'audio_files'; // Name of the subdirectory for audio
+  static const String _imgDirName =
+      'avatar_images'; // Name of the subdirectory for images
+
+  final _uuid = const Uuid();
 
   // --- Avatar List Persistence (SharedPreferences) ---
 
@@ -251,60 +258,69 @@ class StorageService {
     }
   }
 
-  /// Saves the provided audio data (`bytes`) as a file with the given `fileName`
-  /// within the app's dedicated audio directory.
-  /// Returns the full path to the saved file.
-  /// Throws an error if saving fails.
-  Future<String> saveAudioFile(String fileName, List<int> bytes) async {
-    // Get the audio storage directory.
+  /// Saves a new audio file to the device's local storage from a given path.
+  /// This is for native platforms where we have a temporary file from a picker.
+  Future<File?> saveAudioFileFromPath(String tempPath) async {
     final audioDir = await _getAudioDirectory();
     if (audioDir == null) {
-      throw FileSystemException(
-        'Could not get audio directory (platform unsupported or error).',
+      debugPrint(
+        '[StorageService] Could not save audio file because directory is not available.',
       );
+      return null; // Can't save if we can't get the directory.
+    }
+    return null;
+  }
+
+  /// Saves new audio data (from bytes) to storage.
+  /// On native, it saves to a file in the audio directory.
+  /// On web, it saves the bytes to IndexedDB.
+  /// Returns a unique path/key for the saved audio.
+  Future<String?> saveAudioFile(String fileName, Uint8List audioBytes) async {
+    if (kIsWeb) {
+      final key = 'audio_${_uuid.v4()}';
+      await WebDbService.instance.saveAsset(key, audioBytes);
+      return 'indexeddb://$key';
     }
 
-    // TODO: Sanitize fileName? Ensure it doesn't contain path separators etc.
-    final safeFileName = fileName.replaceAll(
-      RegExp(r'[\/\\:*?"<>|]'),
-      '_',
-    ); // Basic sanitization
-    final filePath = '${audioDir.path}/$safeFileName';
-    debugPrint('[StorageService] Saving audio file to: $filePath');
+    // On native platforms, save the bytes to a file.
+    final audioDir = await _getAudioDirectory();
+    if (audioDir == null) {
+      debugPrint(
+        '[StorageService] Could not save audio file: directory not available.',
+      );
+      return null;
+    }
 
     try {
-      // Create a File object representing the target path.
+      final filePath = '${audioDir.path}/$fileName';
       final file = File(filePath);
-      // Write the byte data to the file. This overwrites if the file exists.
-      await file.writeAsBytes(bytes);
-      debugPrint('[StorageService] Audio file saved successfully.');
-      return filePath; // Return the path where the file was saved.
+      await file.writeAsBytes(audioBytes);
+      debugPrint('[StorageService] Saved audio file to: $filePath');
+      return filePath;
     } catch (e, stackTrace) {
-      debugPrint(
-        '[StorageService] Error writing audio file $filePath: $e\n$stackTrace',
-      );
-      // Rethrow the error so the caller (e.g., AvatarProvider) knows it failed.
-      rethrow;
+      debugPrint('[StorageService] Error saving audio file: $e\n$stackTrace');
+      return null;
     }
   }
 
-  /// Deletes the audio file at the specified `filePath`.
-  /// Returns `true` if the file was deleted or didn't exist, `false` on error.
-  Future<bool> deleteAudioFile(String filePath) async {
+  /// Deletes an audio file from local storage.
+  /// On web, it deletes from IndexedDB.
+  /// On native, it deletes from the file system.
+  Future<void> deleteAudioFile(String filePath) async {
+    if (kIsWeb) {
+      if (filePath.startsWith('indexeddb://')) {
+        final key = filePath.substring('indexeddb://'.length);
+        await WebDbService.instance.deleteAsset(key);
+      }
+      return;
+    }
+
     // Basic check: Don't try to delete if the path is empty.
     if (filePath.isEmpty) {
       debugPrint(
         '[StorageService] Cannot delete file: Empty file path provided.',
       );
-      return false;
-    }
-
-    // Skip deletion on web as file paths might not be standard file system paths.
-    if (kIsWeb) {
-      debugPrint(
-        '[StorageService] Skipping file deletion on web for path: $filePath',
-      );
-      return true; // Consider it deleted on web for consistency
+      return;
     }
 
     try {
@@ -316,7 +332,6 @@ class StorageService {
         try {
           await file.delete();
           debugPrint('[StorageService] File deleted successfully.');
-          return true;
         } catch (deleteError, stackTrace) {
           // Log the specific error during deletion.
           debugPrint(
@@ -328,97 +343,108 @@ class StorageService {
           // try {
           //   if (await file.exists()) { await file.delete(); return true; }
           // } catch (retryError) { ... }
-          return false; // Return false if deletion failed.
         }
       } else {
         // If the file doesn't exist, we can consider the deletion successful.
         debugPrint(
           '[StorageService] File does not exist, deletion skipped (considered success).',
         );
-        return true;
       }
     } catch (e, stackTrace) {
       // Catch unexpected errors (e.g., issues with File constructor itself).
       debugPrint(
         '[StorageService] Unexpected error during file deletion check for $filePath: $e\n$stackTrace',
       );
-      return false;
+    }
+  }
+
+  /// Saves an avatar's custom image to storage.
+  /// On web, this saves the image bytes to IndexedDB.
+  /// On native, it saves to a file in the images directory.
+  /// Returns a unique path/key for the saved image.
+  Future<String?> saveAvatarImage(
+    Uint8List imageBytes,
+    String imageName,
+  ) async {
+    if (kIsWeb) {
+      final key = 'image_${_uuid.v4()}';
+      await WebDbService.instance.saveAsset(key, imageBytes);
+      return 'indexeddb://$key';
+    }
+
+    // On native, save to the file system.
+    final imageDir = await _getImagesDirectory();
+    if (imageDir == null) {
+      return null; // Could not get the directory.
+    }
+
+    try {
+      final filePath = '${imageDir.path}/$imageName';
+      final file = File(filePath);
+      await file.writeAsBytes(imageBytes);
+      debugPrint('[StorageService] Saved avatar image to: $filePath');
+      return filePath; // Return the actual file path.
+    } catch (e, stackTrace) {
+      debugPrint('[StorageService] Error saving avatar image: $e\n$stackTrace');
+      return null;
+    }
+  }
+
+  /// Gets the directory where custom avatar images should be stored.
+  /// Creates it if it doesn't exist.
+  Future<Directory?> _getImagesDirectory() async {
+    if (kIsWeb) {
+      return null;
+    }
+    try {
+      final appDocDir = await getApplicationDocumentsDirectory();
+      final imagesDirPath = '${appDocDir.path}/$_imgDirName';
+      final imagesDir = Directory(imagesDirPath);
+
+      if (!await imagesDir.exists()) {
+        await imagesDir.create(recursive: true);
+      }
+      return imagesDir;
+    } catch (e) {
+      debugPrint('[StorageService] Error getting images directory: $e');
+      return null;
     }
   }
 
   // --- Data Clearing ---
 
-  /// Clears *all* data managed by this service:
-  /// - Avatar list from SharedPreferences.
-  /// - Last sync time from SharedPreferences.
-  /// - All files within the dedicated audio directory.
-  Future<void> clearAllData() async {
-    debugPrint(
-      '[StorageService] WARNING: Clearing ALL stored data (prefs and files)... 💣',
-    );
-
+  /// Clears all avatar data from SharedPreferences and all saved audio/image files.
+  /// Returns `true` if all operations were successful, `false` otherwise.
+  Future<bool> clearAllData() async {
     bool prefsCleared = false;
     bool filesCleared = false;
-
-    // 1. Clear SharedPreferences
     try {
       final prefs = await SharedPreferences.getInstance();
-      final r1 = await prefs.remove(_avatarsKey);
-      final r2 = await prefs.remove(_lastSyncKey);
-      // Add other keys here if needed: await prefs.remove('some_other_key');
-      prefsCleared = r1 && r2; // Check if removals were successful
-      debugPrint(
-        '[StorageService] SharedPreferences cleared (success: $prefsCleared).',
-      );
-    } catch (e, stackTrace) {
-      debugPrint(
-        '[StorageService] Error clearing SharedPreferences: $e\n$stackTrace',
-      );
-    }
+      await prefs.remove(_avatarsKey);
+      await prefs.remove(_lastSyncKey);
+      prefsCleared = true;
+      debugPrint('[StorageService] SharedPreferences data cleared.');
 
-    // 2. Clear Audio Files Directory
-    final audioDir = await _getAudioDirectory();
-    if (audioDir != null) {
-      try {
-        debugPrint(
-          '[StorageService] Clearing audio files in directory: ${audioDir.path}',
-        );
-        if (await audioDir.exists()) {
-          // Delete the entire directory and its contents.
+      if (kIsWeb) {
+        await WebDbService.instance.clearAllAssets();
+        filesCleared = true;
+      } else {
+        final audioDir = await _getAudioDirectory();
+        if (audioDir != null && await audioDir.exists()) {
           await audioDir.delete(recursive: true);
-          // Optionally recreate the empty directory immediately.
-          await audioDir.create(recursive: true);
-          filesCleared = true;
-          debugPrint(
-            '[StorageService] Audio files directory cleared and recreated.',
-          );
-        } else {
-          debugPrint(
-            '[StorageService] Audio directory did not exist, no files to clear.',
-          );
-          filesCleared = true; // Considered success if dir doesn't exist.
         }
-      } catch (e, stackTrace) {
-        debugPrint(
-          '[StorageService] Error clearing audio files directory: $e\n$stackTrace',
-        );
+        final imageDir = await _getImagesDirectory();
+        if (imageDir != null && await imageDir.exists()) {
+          await imageDir.delete(recursive: true);
+        }
+        filesCleared = true;
       }
-    } else {
-      // If _getAudioDirectory returned null (e.g., web), consider files cleared.
-      filesCleared = true;
-      debugPrint(
-        '[StorageService] Skipping audio file clearing (platform unsupported or error).',
-      );
+      debugPrint('[StorageService] All asset files cleared.');
+      return prefsCleared && filesCleared;
+    } catch (e, stackTrace) {
+      debugPrint('[StorageService] Error clearing all data: $e\n$stackTrace');
+      return false; // Return false on any error.
     }
-
-    debugPrint(
-      '[StorageService] clearAllData finished. Prefs: $prefsCleared, Files: $filesCleared',
-    );
-
-    // Optionally throw an error if clearing failed partially or completely.
-    // if (!prefsCleared || !filesCleared) {
-    //   throw Exception('Failed to clear all storage data.');
-    // }
   }
 
   // --- JSON Conversion Helpers --- //
@@ -535,33 +561,56 @@ class StorageService {
   }
 
   /// Converts a string (from storage) back into `IconData`.
-  /// Handles the format "codePoint:fontFamily:fontPackage".
+  /// Uses a predefined set of icons for web compatibility.
   /// Returns null if the string is empty or invalid.
   IconData? _stringToIconData(String? iconString) {
     if (iconString == null || iconString.isEmpty) {
       return null; // Return null if input is null or empty
     }
-    try {
-      final parts = iconString.split(':');
-      if (parts.length < 2)
-        throw const FormatException('Invalid IconData string format');
 
-      final codePoint = int.parse(parts[0]);
-      // Handle "null" strings correctly when parsing.
-      final fontFamily = (parts[1] == 'null') ? null : parts[1];
-      final fontPackage =
-          (parts.length > 2 && parts[2] != 'null') ? parts[2] : null;
+    // Use predefined icons for web compatibility
+    final predefinedIcons = <String, IconData>{
+      '${Icons.person.codePoint}:${Icons.person.fontFamily}:${Icons.person.fontPackage}':
+          Icons.person,
+      '${Icons.face.codePoint}:${Icons.face.fontFamily}:${Icons.face.fontPackage}':
+          Icons.face,
+      '${Icons.account_circle.codePoint}:${Icons.account_circle.fontFamily}:${Icons.account_circle.fontPackage}':
+          Icons.account_circle,
+      '${Icons.emoji_emotions.codePoint}:${Icons.emoji_emotions.fontFamily}:${Icons.emoji_emotions.fontPackage}':
+          Icons.emoji_emotions,
+      '${Icons.psychology.codePoint}:${Icons.psychology.fontFamily}:${Icons.psychology.fontPackage}':
+          Icons.psychology,
+      '${Icons.smart_toy.codePoint}:${Icons.smart_toy.fontFamily}:${Icons.smart_toy.fontPackage}':
+          Icons.smart_toy,
+      '${Icons.android.codePoint}:${Icons.android.fontFamily}:${Icons.android.fontPackage}':
+          Icons.android,
+      '${Icons.pets.codePoint}:${Icons.pets.fontFamily}:${Icons.pets.fontPackage}':
+          Icons.pets,
+      '${Icons.star.codePoint}:${Icons.star.fontFamily}:${Icons.star.fontPackage}':
+          Icons.star,
+      '${Icons.favorite.codePoint}:${Icons.favorite.fontFamily}:${Icons.favorite.fontPackage}':
+          Icons.favorite,
+      '${Icons.music_note.codePoint}:${Icons.music_note.fontFamily}:${Icons.music_note.fontPackage}':
+          Icons.music_note,
+      '${Icons.mic.codePoint}:${Icons.mic.fontFamily}:${Icons.mic.fontPackage}':
+          Icons.mic,
+      '${Icons.record_voice_over.codePoint}:${Icons.record_voice_over.fontFamily}:${Icons.record_voice_over.fontPackage}':
+          Icons.record_voice_over,
+      '${Icons.campaign.codePoint}:${Icons.campaign.fontFamily}:${Icons.campaign.fontPackage}':
+          Icons.campaign,
+      '${Icons.volume_up.codePoint}:${Icons.volume_up.fontFamily}:${Icons.volume_up.fontPackage}':
+          Icons.volume_up,
+    };
 
-      return IconData(
-        codePoint,
-        fontFamily: fontFamily,
-        fontPackage: fontPackage,
-      );
-    } catch (e) {
-      debugPrint(
-        '[StorageService] Error converting string "$iconString" to IconData: $e',
-      );
-      return null; // Return null if parsing fails
+    // Try to find the icon in our predefined set
+    if (predefinedIcons.containsKey(iconString)) {
+      return predefinedIcons[iconString];
     }
+
+    // Fallback to a default icon if not found
+    debugPrint(
+      '[StorageService] Icon not found in predefined set: $iconString, using default',
+    );
+    return Icons.person; // Default fallback icon
   }
 }

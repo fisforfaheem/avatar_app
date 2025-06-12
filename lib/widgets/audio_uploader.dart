@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -20,6 +21,7 @@ class AudioUploader extends StatefulWidget {
 class _AudioUploaderState extends State<AudioUploader> {
   final _nameController = TextEditingController();
   PlatformFile? _selectedFile;
+  Uint8List? _selectedFileBytes;
   bool _isUploading = false;
   AudioPlayer? _audioPlayer;
   Duration _duration = Duration.zero;
@@ -63,6 +65,7 @@ class _AudioUploaderState extends State<AudioUploader> {
   }
 
   void _cleanupTempFile() {
+    if (kIsWeb) return; // No temp files on web
     if (_tempFilePath != null) {
       try {
         final file = File(_tempFilePath!);
@@ -87,6 +90,9 @@ class _AudioUploaderState extends State<AudioUploader> {
     try {
       _safeSetState(() {
         _errorMessage = null;
+        _selectedFile = null;
+        _selectedFileBytes = null;
+        _duration = Duration.zero;
       });
 
       final result = await FilePicker.platform.pickFiles(
@@ -113,38 +119,35 @@ class _AudioUploaderState extends State<AudioUploader> {
         return;
       }
 
-      // Create a temporary file
-      final tempDir = await getTemporaryDirectory();
-      final tempFile = File(
-        path.join(
-          tempDir.path,
-          'temp_${DateTime.now().millisecondsSinceEpoch}_${file.name}',
-        ),
-      );
-
-      // Write the file data
-      if (file.bytes != null) {
-        await tempFile.writeAsBytes(file.bytes!);
-      } else if (file.path != null) {
-        await File(file.path!).copy(tempFile.path);
+      if (kIsWeb) {
+        _selectedFileBytes = file.bytes;
       } else {
-        throw Exception('No file data available');
+        // Create a temporary file for native
+        final tempDir = await getTemporaryDirectory();
+        final tempFile = File(
+          path.join(
+            tempDir.path,
+            'temp_${DateTime.now().millisecondsSinceEpoch}_${file.name}',
+          ),
+        );
+
+        // Write the file data
+        if (file.bytes != null) {
+          await tempFile.writeAsBytes(file.bytes!);
+        } else if (file.path != null) {
+          await File(file.path!).copy(tempFile.path);
+        } else {
+          throw Exception('No file data available for native platform');
+        }
+
+        _cleanupTempFile(); // Clean up previous temp file
+        _tempFilePath = tempFile.path;
       }
 
       if (_isDisposed) {
-        // Clean up if widget was disposed during async operation
-        try {
-          if (tempFile.existsSync()) {
-            tempFile.deleteSync();
-          }
-        } catch (e) {
-          debugPrint('Error cleaning up temp file: $e');
-        }
+        if (!kIsWeb) _cleanupTempFile();
         return;
       }
-
-      _cleanupTempFile();
-      _tempFilePath = tempFile.path;
 
       _safeSetState(() {
         _selectedFile = file;
@@ -157,17 +160,33 @@ class _AudioUploaderState extends State<AudioUploader> {
         }
 
         await _audioPlayer?.stop();
-        await _audioPlayer?.setSource(DeviceFileSource(tempFile.path));
+
+        if (kIsWeb) {
+          if (_selectedFileBytes == null) {
+            throw Exception('File bytes not available for web playback.');
+          }
+          await _audioPlayer?.setSource(BytesSource(_selectedFileBytes!));
+        } else {
+          if (_tempFilePath == null) {
+            throw Exception(
+              'Temporary file path not available for native playback.',
+            );
+          }
+          await _audioPlayer?.setSource(DeviceFileSource(_tempFilePath!));
+        }
 
         // Wait for duration to be set via listener
+        // This might need a more robust solution than a fixed delay.
         await Future.delayed(const Duration(milliseconds: 500));
 
         if (_isDisposed) return;
 
         if (_duration == Duration.zero) {
           _safeSetState(() {
-            _errorMessage = 'Could not determine audio duration';
+            _errorMessage =
+                'Could not determine audio duration. The file might be corrupt or unsupported.';
             _selectedFile = null;
+            _selectedFileBytes = null;
           });
           return;
         }
@@ -177,6 +196,7 @@ class _AudioUploaderState extends State<AudioUploader> {
           _safeSetState(() {
             _errorMessage = 'Audio must be shorter than 5 minutes';
             _selectedFile = null;
+            _selectedFileBytes = null;
           });
           return;
         }
@@ -187,6 +207,7 @@ class _AudioUploaderState extends State<AudioUploader> {
             _errorMessage =
                 'Error loading audio file. Please try another file.';
             _selectedFile = null;
+            _selectedFileBytes = null;
           });
         }
       }
@@ -236,13 +257,17 @@ class _AudioUploaderState extends State<AudioUploader> {
           '${DateTime.now().millisecondsSinceEpoch}_${_selectedFile!.name}';
 
       // Get file bytes
-      List<int> fileBytes;
-      if (_selectedFile!.bytes != null) {
-        fileBytes = _selectedFile!.bytes!;
-      } else if (_tempFilePath != null) {
-        fileBytes = await File(_tempFilePath!).readAsBytes();
+      Uint8List fileBytes;
+      if (kIsWeb) {
+        if (_selectedFileBytes == null) {
+          throw Exception('No file bytes available for web upload.');
+        }
+        fileBytes = _selectedFileBytes!;
       } else {
-        throw Exception('No file data available');
+        if (_tempFilePath == null) {
+          throw Exception('No temp file path available for native upload.');
+        }
+        fileBytes = await File(_tempFilePath!).readAsBytes();
       }
 
       // Save the file using the AvatarProvider's storage service
@@ -250,15 +275,29 @@ class _AudioUploaderState extends State<AudioUploader> {
         fileName,
         fileBytes,
       );
-      debugPrint('File saved to: $savedFilePath');
 
-      if (!_isDisposed && mounted) {
-        widget.onUpload(_nameController.text.trim(), savedFilePath, _duration);
+      if (_isDisposed) return;
 
-        // Reset form
+      if (savedFilePath == null) {
         _safeSetState(() {
+          _errorMessage = 'Error saving file. Please try again.';
+          _isUploading = false;
+        });
+        return;
+      }
+
+      // If successful, trigger the callback and reset the state
+      if (!_isDisposed && mounted) {
+        widget.onUpload(
+          _nameController.text.trim(),
+          savedFilePath, // Now guaranteed to be non-null
+          _duration,
+        );
+        _safeSetState(() {
+          _isUploading = false;
           _nameController.clear();
           _selectedFile = null;
+          _selectedFileBytes = null;
           _duration = Duration.zero;
           _errorMessage = null;
         });
@@ -290,6 +329,7 @@ class _AudioUploaderState extends State<AudioUploader> {
     _safeSetState(() {
       _nameController.clear();
       _selectedFile = null;
+      _selectedFileBytes = null;
       _duration = Duration.zero;
       _errorMessage = null;
     });

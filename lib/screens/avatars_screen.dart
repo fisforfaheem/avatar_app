@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/avatar_provider.dart';
 import '../widgets/avatar_grid.dart';
+import 'add_avatar_screen.dart';
 
 class AvatarsScreen extends StatelessWidget {
   const AvatarsScreen({super.key});
@@ -132,7 +133,7 @@ class AvatarsScreen extends StatelessWidget {
           Icon(
             Icons.face_outlined,
             size: isMobile ? 60 : 80,
-            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+            color: theme.colorScheme.onSurfaceVariant.withAlpha(153),
           ),
           SizedBox(height: isMobile ? 16 : 24),
           Text(
@@ -173,6 +174,18 @@ class AvatarsScreen extends StatelessWidget {
 
   // Show dialog to add a new avatar
   void _showAddAvatarDialog(BuildContext context) {
-    Navigator.pushNamed(context, '/add-avatar');
+    final avatarProvider = Provider.of<AvatarProvider>(context, listen: false);
+    showDialog(
+      context: context,
+      builder: (context) => const AddAvatarScreen(),
+    ).then((result) {
+      if (result != null && result['name'].isNotEmpty) {
+        avatarProvider.addAvatar(
+          result['name'],
+          icon: result['icon'],
+          color: result['color'],
+        );
+      }
+    });
   }
 }

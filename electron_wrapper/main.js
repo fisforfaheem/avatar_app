@@ -1,10 +1,10 @@
-const { app, BrowserWindow, Menu } = require('electron');
+const { app, BrowserWindow, Menu, shell } = require('electron');
 const path = require('path');
 
 let mainWindow;
+const isDevelopment = !app.isPackaged;
 
 function createWindow() {
-  // Create the browser window
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 720,
@@ -13,27 +13,26 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: true
+      sandbox: true,
+      webSecurity: true,
+      devTools: isDevelopment,
     },
     icon: path.join(__dirname, 'web/favicon.png'),
     title: 'Voice Avatar Hub',
-    show: false // Don't show until ready
+    show: false,
   });
 
-  // Load the Flutter web app
-  mainWindow.loadFile('web/index.html');
+  const appEntry = path.join(__dirname, '..', 'web', 'index.html');
+  mainWindow.loadFile(appEntry);
 
-  // Show window when ready to prevent visual flash
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
   });
 
-  // Handle window closed
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 
-  // Create application menu
   const template = [
     {
       label: 'File',
@@ -50,10 +49,14 @@ function createWindow() {
     {
       label: 'View',
       submenu: [
-        { role: 'reload' },
-        { role: 'forceReload' },
-        { role: 'toggleDevTools' },
-        { type: 'separator' },
+        ...(isDevelopment
+          ? [
+              { role: 'reload' },
+              { role: 'forceReload' },
+              { role: 'toggleDevTools' },
+              { type: 'separator' },
+            ]
+          : []),
         { role: 'resetZoom' },
         { role: 'zoomIn' },
         { role: 'zoomOut' },
@@ -72,12 +75,29 @@ function createWindow() {
 
   const menu = Menu.buildFromTemplate(template);
   Menu.setApplicationMenu(menu);
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    try {
+      const parsedUrl = new URL(url);
+      if (parsedUrl.protocol === 'https:') {
+        shell.openExternal(url);
+      }
+    } catch (_) {
+      // Ignore malformed URLs and deny the popup.
+    }
+
+    return { action: 'deny' };
+  });
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url !== mainWindow.webContents.getURL()) {
+      event.preventDefault();
+    }
+  });
 }
 
-// This method will be called when Electron has finished initialization
 app.whenReady().then(createWindow);
 
-// Quit when all windows are closed
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
@@ -89,10 +109,3 @@ app.on('activate', () => {
     createWindow();
   }
 });
-
-// Security: Prevent new window creation
-app.on('web-contents-created', (event, contents) => {
-  contents.on('new-window', (event, navigationUrl) => {
-    event.preventDefault();
-  });
-}); 

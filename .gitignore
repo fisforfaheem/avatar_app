@@ -32,6 +32,20 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+dist/
+release_package/
+*.zip
+*.exe
+*.dll
+*.msix
+*.appinstaller
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
 
 # Symbolication related
 app.*.symbols
